@@ -346,6 +346,69 @@ wheels = [
 ]
 
 [[package]]
+name = "coldpipe"
+version = "2.0.0"
+source = { editable = "." }
+dependencies = [
+    { name = "aiodns" },
+    { name = "aiohttp" },
+    { name = "aioimaplib" },
+    { name = "aiosmtplib" },
+    { name = "aiosqlite" },
+    { name = "anthropic" },
+    { name = "apscheduler" },
+    { name = "crawl4ai" },
+    { name = "exa-py" },
+    { name = "jinja2" },
+    { name = "lxml" },
+    { name = "msgspec" },
+    { name = "pydantic-settings" },
+    { name = "rapidfuzz" },
+    { name = "rich" },
+    { name = "structlog" },
+    { name = "textual" },
+    { name = "typer" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pyright" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aiodns", specifier = ">=3.0" },
+    { name = "aiohttp", specifier = ">=3.9" },
+    { name = "aioimaplib", specifier = ">=2.0" },
+    { name = "aiosmtplib", specifier = ">=3.0" },
+    { name = "aiosqlite", specifier = ">=0.22" },
+    { name = "anthropic", specifier = ">=0.40" },
+    { name = "apscheduler", specifier = ">=4.0a1" },
+    { name = "crawl4ai", specifier = ">=0.8" },
+    { name = "exa-py", specifier = ">=2.4.0" },
+    { name = "jinja2", specifier = ">=3.1" },
+    { name = "lxml", specifier = ">=5.0" },
+    { name = "msgspec", specifier = ">=0.20" },
+    { name = "pydantic-settings", specifier = ">=2.0" },
+    { name = "rapidfuzz", specifier = ">=3.0" },
+    { name = "rich", specifier = ">=13.0" },
+    { name = "structlog", specifier = ">=24.0" },
+    { name = "textual", specifier = ">=0.80" },
+    { name = "typer", specifier = ">=0.12" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pyright", specifier = ">=1.1" },
+    { name = "pytest", specifier = ">=8.0" },
+    { name = "pytest-asyncio", specifier = ">=0.24" },
+    { name = "ruff", specifier = ">=0.8" },
+]
+
+[[package]]
 name = "colorama"
 version = "0.4.6"
 source = { registry = "https://pypi.org/simple" }
@@ -461,67 +524,6 @@ wheels = [
 ]
 
 [[package]]
-name = "dentists"
-version = "2.0.0"
-source = { editable = "." }
-dependencies = [
-    { name = "aiodns" },
-    { name = "aiohttp" },
-    { name = "aioimaplib" },
-    { name = "aiosmtplib" },
-    { name = "aiosqlite" },
-    { name = "anthropic" },
-    { name = "apscheduler" },
-    { name = "crawl4ai" },
-    { name = "jinja2" },
-    { name = "lxml" },
-    { name = "msgspec" },
-    { name = "pydantic-settings" },
-    { name = "rapidfuzz" },
-    { name = "rich" },
-    { name = "structlog" },
-    { name = "textual" },
-    { name = "typer" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pyright" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "aiodns", specifier = ">=3.0" },
-    { name = "aiohttp", specifier = ">=3.9" },
-    { name = "aioimaplib", specifier = ">=2.0" },
-    { name = "aiosmtplib", specifier = ">=3.0" },
-    { name = "aiosqlite", specifier = ">=0.22" },
-    { name = "anthropic", specifier = ">=0.40" },
-    { name = "apscheduler", specifier = ">=4.0a1" },
-    { name = "crawl4ai", specifier = ">=0.8" },
-    { name = "jinja2", specifier = ">=3.1" },
-    { name = "lxml", specifier = ">=5.0" },
-    { name = "msgspec", specifier = ">=0.20" },
-    { name = "pydantic-settings", specifier = ">=2.0" },
-    { name = "rapidfuzz", specifier = ">=3.0" },
-    { name = "rich", specifier = ">=13.0" },
-    { name = "structlog", specifier = ">=24.0" },
-    { name = "textual", specifier = ">=0.80" },
-    { name = "typer", specifier = ">=0.12" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pyright", specifier = ">=1.1" },
-    { name = "pytest", specifier = ">=8.0" },
-    { name = "pytest-asyncio", specifier = ">=0.24" },
-    { name = "ruff", specifier = ">=0.8" },
-]
-
-[[package]]
 name = "distro"
 version = "1.9.0"
 source = { registry = "https://pypi.org/simple" }
@@ -537,6 +539,24 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/b2/9d/c3b43da9515bd270df0f80548d9944e389870713cc1fe2b8fb35fe2bcefd/docstring_parser-0.17.0.tar.gz", hash = "sha256:583de4a309722b3315439bb31d64ba3eebada841f2e2cee23b99df001434c912", size = 27442, upload-time = "2025-07-21T07:35:01.868Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/55/e2/2537ebcff11c1ee1ff17d8d0b6f4db75873e3b0fb32c2d4a2ee31ecb310a/docstring_parser-0.17.0-py3-none-any.whl", hash = "sha256:cf2569abd23dce8099b300f9b4fa8191e9582dda731fd533daf54c4551658708", size = 36896, upload-time = "2025-07-21T07:35:00.684Z" },
+]
+
+[[package]]
+name = "exa-py"
+version = "2.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpcore" },
+    { name = "httpx" },
+    { name = "openai" },
+    { name = "pydantic" },
+    { name = "python-dotenv" },
+    { name = "requests" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/dc/84/f641b3bfb461dcb27a8c2637fdadde6a984fc18113a337f6f3014a0c039f/exa_py-2.4.0.tar.gz", hash = "sha256:d6fa0bb54d2395f529fe90a52f8c5786397515491691f43e2bc42cb3d298c33a", size = 48029, upload-time = "2026-02-10T03:54:08.861Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/55/70/58e381b5eb95954c91ff82746273bc35bff1e21c42aef567f44d671f291e/exa_py-2.4.0-py3-none-any.whl", hash = "sha256:8522cdcf33832f86a4ba5f6aff7cf7c50dff5172f911bcb3e33c7076e4b27e05", size = 63078, upload-time = "2026-02-10T03:54:07.899Z" },
 ]
 
 [[package]]

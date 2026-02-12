@@ -21,6 +21,7 @@ dependencies = [
     "apscheduler>=4.0a1",
     "pydantic-settings>=2.0",
     "structlog>=24.0",
+    "exa-py>=2.4.0",
 ]
 
 [project.scripts]
