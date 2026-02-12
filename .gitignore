@@ -4,4 +4,4 @@
 __pycache__/
 output/
 .env
-dentists.toml
+coldpipe.toml

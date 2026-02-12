@@ -1,4 +1,4 @@
-/* Dentists TUI Stylesheet */
+/* Coldpipe TUI Stylesheet */
 
 Screen {
     background: $background;

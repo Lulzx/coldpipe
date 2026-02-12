@@ -1,4 +1,4 @@
-"""Database layer for the dentists project.
+"""Database layer for the coldpipe project.
 
 Usage:
     async with get_db() as db:
@@ -16,7 +16,7 @@ import aiosqlite
 
 from .migrate import migrate
 
-DB_PATH = Path(__file__).resolve().parent.parent / "data" / "dentists.db"
+DB_PATH = Path(__file__).resolve().parent.parent / "data" / "coldpipe.db"
 
 
 async def _setup_connection(db: aiosqlite.Connection) -> None:

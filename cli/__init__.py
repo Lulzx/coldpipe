@@ -12,8 +12,8 @@ from db import get_db
 from db.migrate import init_schema
 
 app = typer.Typer(
-    name="dentists",
-    help="Customer Acquisition Engine for dental practices.",
+    name="coldpipe",
+    help="Customer Acquisition Engine.",
     no_args_is_help=True,
 )
 
@@ -46,7 +46,7 @@ def db_init():
 
 @db_app.command("backup")
 def db_backup(
-    output: str = typer.Option("data/dentists_backup.db", help="Backup file path"),
+    output: str = typer.Option("data/coldpipe_backup.db", help="Backup file path"),
 ):
     """Create a backup of the database."""
     import shutil

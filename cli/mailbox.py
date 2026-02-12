@@ -109,7 +109,7 @@ def test(
             async with EmailSender(smtp, from_addr=mb.email, display_name=mb.display_name) as sender:
                 msg_id = await sender.send(
                     to_email,
-                    "Test email from Dentists CLI",
+                    "Test email from Coldpipe CLI",
                     "This is a test email to verify your mailbox configuration.\n\nIf you received this, your SMTP settings are working correctly.",
                 )
                 console.print(f"[green]Test email sent! Message-ID: {msg_id}[/green]")

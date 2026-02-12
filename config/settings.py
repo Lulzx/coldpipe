@@ -9,7 +9,7 @@ import msgspec
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
-DB_PATH = DATA_DIR / "dentists.db"
+DB_PATH = DATA_DIR / "coldpipe.db"
 TEMPLATES_DIR = DATA_DIR / "templates"
 INPUT_DIR = DATA_DIR / "input"
 
@@ -64,7 +64,7 @@ class Settings(msgspec.Struct, kw_only=True):
 
 def load_settings() -> Settings:
     """Load settings from environment variables and optional TOML."""
-    toml_path = BASE_DIR / "dentists.toml"
+    toml_path = BASE_DIR / "coldpipe.toml"
     data: dict = {}
 
     if toml_path.exists():

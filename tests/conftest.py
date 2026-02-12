@@ -1,4 +1,4 @@
-"""Shared test fixtures for the dentists test suite."""
+"""Shared test fixtures for the coldpipe test suite."""
 
 from __future__ import annotations
 

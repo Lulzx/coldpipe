@@ -1,4 +1,4 @@
-"""Version-based migration system for the dentists database."""
+"""Version-based migration system for the coldpipe database."""
 
 from __future__ import annotations
 

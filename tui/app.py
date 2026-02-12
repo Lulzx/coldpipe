@@ -1,4 +1,4 @@
-"""Main Textual App class for the Dentists TUI."""
+"""Main Textual App class for the Coldpipe TUI."""
 
 from __future__ import annotations
 
@@ -14,17 +14,17 @@ from tui.screens.leads import LeadsScreen
 from tui.screens.pipeline import PipelineScreen
 from tui.screens.settings import SettingsScreen
 
-CSS_PATH = Path(__file__).parent / "dentists.tcss"
+CSS_PATH = Path(__file__).parent / "coldpipe.tcss"
 
 
 def _make_screen(cls, pool):
     return cls(pool)
 
 
-class DentistsApp(App):
-    """Dentists Customer Acquisition Engine -- TUI."""
+class ColdpipeApp(App):
+    """Coldpipe Customer Acquisition Engine -- TUI."""
 
-    TITLE = "Dentists"
+    TITLE = "Coldpipe"
     SUB_TITLE = "Customer Acquisition Engine"
     CSS_PATH = CSS_PATH
 

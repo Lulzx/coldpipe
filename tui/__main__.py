@@ -1,6 +1,6 @@
 """Entry point: python -m tui"""
 
-from tui.app import DentistsApp
+from tui.app import ColdpipeApp
 
-app = DentistsApp()
+app = ColdpipeApp()
 app.run()

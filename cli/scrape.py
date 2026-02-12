@@ -24,7 +24,7 @@ def google_maps(
     city: str = typer.Option(..., help="City/state to search, e.g. 'Phoenix, AZ'"),
     max_results: int = typer.Option(100, "--max", help="Max results to fetch"),
 ):
-    """Scrape dentist leads from Google Maps via Crawl4AI."""
+    """Scrape leads from Google Maps via Crawl4AI."""
     setup_logging()
 
     async def _scrape():
@@ -43,7 +43,7 @@ def yelp(
     city: str = typer.Option(..., help="City/state to search"),
     pages: int = typer.Option(5, help="Number of pages to scrape"),
 ):
-    """Scrape dentist leads from Yelp."""
+    """Scrape leads from Yelp."""
     setup_logging()
 
     async def _scrape():
@@ -61,7 +61,7 @@ def yelp(
 def healthgrades(
     city: str = typer.Option(..., help="City/state to search"),
 ):
-    """Scrape dentist leads from Healthgrades."""
+    """Scrape leads from Healthgrades."""
     setup_logging()
 
     async def _scrape():
@@ -80,7 +80,7 @@ def exa(
     query: str = typer.Option(..., help="Search query for Exa.ai"),
     max_results: int = typer.Option(50, "--max", help="Max results"),
 ):
-    """Search for dentist leads via Exa.ai API."""
+    """Search for leads via Exa.ai API."""
     setup_logging()
 
     async def _scrape():

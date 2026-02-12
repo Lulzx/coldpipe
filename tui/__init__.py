@@ -1,1 +1,1 @@
-"""Textual TUI for the dentists project."""
+"""Textual TUI for the coldpipe project."""

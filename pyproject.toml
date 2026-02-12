@@ -1,7 +1,7 @@
 [project]
-name = "dentists"
+name = "coldpipe"
 version = "2.0.0"
-description = "Customer Acquisition Engine for dental practices"
+description = "Customer Acquisition Engine"
 requires-python = ">=3.14"
 dependencies = [
     "aiohttp>=3.9",
@@ -24,7 +24,7 @@ dependencies = [
 ]
 
 [project.scripts]
-dentists = "cli:app"
+coldpipe = "cli:app"
 
 [build-system]
 requires = ["hatchling"]

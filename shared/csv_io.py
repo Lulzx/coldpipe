@@ -112,7 +112,7 @@ def load_leads(filepath: str) -> list[dict]:
 
 
 def load_all_leads(data_dir: str) -> list[dict]:
-    """Load all CSVs in data_dir, skipping dentist_emails.csv (scraper output)."""
+    """Load all CSVs in data_dir, skipping scraper output files."""
     all_rows = []
     for fname in sorted(os.listdir(data_dir)):
         if not fname.endswith(".csv"):

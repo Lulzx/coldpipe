@@ -1,5 +1,5 @@
-# Dentists Customer Acquisition Engine - Configuration
-# Copy to dentists.toml and fill in your values.
+# Coldpipe Customer Acquisition Engine - Configuration
+# Copy to coldpipe.toml and fill in your values.
 
 anthropic_api_key = ""
 exa_api_key = ""
