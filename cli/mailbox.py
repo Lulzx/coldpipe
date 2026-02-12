@@ -9,8 +9,7 @@ from rich.console import Console
 from rich.table import Table
 
 from config import setup_logging
-from db import get_db
-from db import queries
+from db import get_db, queries
 from db.models import Mailbox
 
 console = Console()
@@ -42,8 +41,10 @@ def add(
         async with get_db() as db:
             mb = Mailbox(
                 email=email,
-                smtp_host=smtp_host, smtp_port=smtp_port,
-                smtp_user=smtp_user, smtp_pass=smtp_pass,
+                smtp_host=smtp_host,
+                smtp_port=smtp_port,
+                smtp_user=smtp_user,
+                smtp_pass=smtp_pass,
                 imap_host=imap_host or smtp_host.replace("smtp.", "imap."),
                 imap_port=imap_port,
                 imap_user=imap_user or smtp_user,
@@ -75,8 +76,11 @@ def list_mailboxes():
 
             for mb in mailboxes:
                 table.add_row(
-                    str(mb.id), mb.email, mb.smtp_host,
-                    str(mb.daily_limit), str(mb.warmup_day),
+                    str(mb.id),
+                    mb.email,
+                    mb.smtp_host,
+                    str(mb.daily_limit),
+                    str(mb.warmup_day),
                     "Yes" if mb.is_active else "No",
                 )
             console.print(table)
@@ -103,10 +107,14 @@ def test(
             from email_engine.sender import EmailSender
 
             smtp = SmtpSettings(
-                host=mb.smtp_host, port=mb.smtp_port,
-                user=mb.smtp_user, password=mb.smtp_pass,
+                host=mb.smtp_host,
+                port=mb.smtp_port,
+                user=mb.smtp_user,
+                password=mb.smtp_pass,
             )
-            async with EmailSender(smtp, from_addr=mb.email, display_name=mb.display_name) as sender:
+            async with EmailSender(
+                smtp, from_addr=mb.email, display_name=mb.display_name
+            ) as sender:
                 msg_id = await sender.send(
                     to_email,
                     "Test email from Coldpipe CLI",

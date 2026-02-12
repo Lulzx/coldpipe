@@ -10,8 +10,8 @@ from .templates import render_template
 
 __all__ = [
     "EmailSender",
-    "SendQueue",
     "ReplyWatcher",
+    "SendQueue",
     "advance_sequence",
     "batch_personalize",
     "handle_reply",

@@ -100,7 +100,9 @@ async def test_personalize_opener_no_api_key():
 async def test_personalize_opener_with_mock_api():
     """With API key, should call Claude and return the response."""
     mock_response = MagicMock()
-    mock_response.content = [MagicMock(text="I noticed your Austin practice uses cutting-edge tech.")]
+    mock_response.content = [
+        MagicMock(text="I noticed your Austin practice uses cutting-edge tech.")
+    ]
 
     mock_client = MagicMock()
     mock_client.messages.create = AsyncMock(return_value=mock_response)
@@ -201,6 +203,7 @@ async def test_batch_personalize_semaphore_limit():
         call_count += 1
         # Small yield to allow other tasks to run
         import asyncio
+
         await asyncio.sleep(0.01)
         current_concurrent -= 1
         resp = MagicMock()

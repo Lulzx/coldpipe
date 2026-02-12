@@ -1,11 +1,12 @@
 """Tool 1: Merge & deduplicate all CSVs into a master lead list."""
+
 import argparse
 import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from shared.csv_io import load_all_leads, save_csv, MASTER_FIELDS
+from shared.csv_io import MASTER_FIELDS, load_all_leads, save_csv
 
 
 def deduplicate(leads: list[dict]) -> list[dict]:

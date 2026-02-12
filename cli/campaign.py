@@ -9,8 +9,7 @@ from rich.console import Console
 from rich.table import Table
 
 from config import setup_logging
-from db import get_db
-from db import queries
+from db import get_db, queries
 from db.models import Campaign, SequenceStep
 
 console = Console()
@@ -43,19 +42,44 @@ def create(
 
             # Auto-add default 4-step sequence
             steps = [
-                SequenceStep(campaign_id=camp_id, step_number=0, template_name="cold_intro.txt",
-                             subject="Quick question about {{ company }}", delay_days=0),
-                SequenceStep(campaign_id=camp_id, step_number=1, template_name="followup_1.txt",
-                             subject="Re: Quick question about {{ company }}", delay_days=3, is_reply=1),
-                SequenceStep(campaign_id=camp_id, step_number=2, template_name="followup_2.txt",
-                             subject="Re: Quick question about {{ company }}", delay_days=4, is_reply=1),
-                SequenceStep(campaign_id=camp_id, step_number=3, template_name="breakup.txt",
-                             subject="Re: Quick question about {{ company }}", delay_days=5, is_reply=1),
+                SequenceStep(
+                    campaign_id=camp_id,
+                    step_number=0,
+                    template_name="cold_intro.txt",
+                    subject="Quick question about {{ company }}",
+                    delay_days=0,
+                ),
+                SequenceStep(
+                    campaign_id=camp_id,
+                    step_number=1,
+                    template_name="followup_1.txt",
+                    subject="Re: Quick question about {{ company }}",
+                    delay_days=3,
+                    is_reply=1,
+                ),
+                SequenceStep(
+                    campaign_id=camp_id,
+                    step_number=2,
+                    template_name="followup_2.txt",
+                    subject="Re: Quick question about {{ company }}",
+                    delay_days=4,
+                    is_reply=1,
+                ),
+                SequenceStep(
+                    campaign_id=camp_id,
+                    step_number=3,
+                    template_name="breakup.txt",
+                    subject="Re: Quick question about {{ company }}",
+                    delay_days=5,
+                    is_reply=1,
+                ),
             ]
             for step in steps:
                 await queries.add_sequence_step(db, step)
 
-            console.print(f"[green]Created campaign '{name}' (id={camp_id}) with 4-step sequence[/green]")
+            console.print(
+                f"[green]Created campaign '{name}' (id={camp_id}) with 4-step sequence[/green]"
+            )
 
     _run(_create())
 
@@ -80,8 +104,11 @@ def list_campaigns(
 
             for c in camps:
                 table.add_row(
-                    str(c.id), c.name, c.status,
-                    str(c.mailbox_id or "-"), str(c.daily_limit),
+                    str(c.id),
+                    c.name,
+                    c.status,
+                    str(c.mailbox_id or "-"),
+                    str(c.daily_limit),
                     c.created_at[:10] if c.created_at else "-",
                 )
             console.print(table)

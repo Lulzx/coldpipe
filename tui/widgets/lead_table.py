@@ -100,7 +100,7 @@ class LeadTable(Widget):
 
     def on_select_changed(self, event: Select.Changed) -> None:
         if event.select.id == "status-filter":
-            self._status_filter = event.value or None
+            self._status_filter = str(event.value) if event.value else None
             self._page = 0
             self.load_data()
 

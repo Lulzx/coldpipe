@@ -30,9 +30,7 @@ def is_junk(e: str) -> bool:
         return True
     if domain.count(".") >= 3:
         return True
-    if len(e) > 80:
-        return True
-    return False
+    return len(e) > 80
 
 
 def decode_cfemail(encoded: str) -> str:

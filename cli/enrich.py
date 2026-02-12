@@ -6,11 +6,9 @@ import asyncio
 
 import typer
 from rich.console import Console
-from rich.progress import Progress
 
 from config import setup_logging
-from db import get_db
-from db import queries
+from db import get_db, queries
 
 console = Console()
 enrich_app = typer.Typer(help="Enrich leads with missing data.")
@@ -35,23 +33,19 @@ def run(
             leads = await queries.get_leads(db, limit=batch_size, email_status="missing")
             leads += await queries.get_leads(db, limit=batch_size, email_status="unknown")
             # Filter to those with websites
-            to_enrich = [l for l in leads if l.website and not l.email]
+            to_enrich = [lead for lead in leads if lead.website and not lead.email]
 
             if not to_enrich:
-                console.print("[yellow]No leads to enrich (all have emails or no websites)[/yellow]")
+                console.print(
+                    "[yellow]No leads to enrich (all have emails or no websites)[/yellow]"
+                )
                 return
 
             console.print(f"Enriching {len(to_enrich)} leads...")
             enricher = WebsiteEnricher()
 
-            enriched = 0
-            with Progress(console=console) as progress:
-                task = progress.add_task("Enriching...", total=len(to_enrich))
-                for lead in to_enrich:
-                    result = await enricher.enrich_lead(db, lead)
-                    if result:
-                        enriched += 1
-                    progress.advance(task)
+            results = await enricher.scrape(db, limit=len(to_enrich))
+            enriched = len(results)
 
             console.print(f"[green]Enriched {enriched}/{len(to_enrich)} leads[/green]")
 

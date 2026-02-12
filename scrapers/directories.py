@@ -47,7 +47,12 @@ _ZOCDOC_SCHEMA = {
         {"name": "first_name", "selector": "h2[data-test='provider-name']", "type": "text"},
         {"name": "address", "selector": "div[data-test='provider-address']", "type": "text"},
         {"name": "phone", "selector": "a[data-test='provider-phone']", "type": "text"},
-        {"name": "url", "selector": "a[data-test='provider-name-link']", "type": "attribute", "attribute": "href"},
+        {
+            "name": "url",
+            "selector": "a[data-test='provider-name-link']",
+            "type": "attribute",
+            "attribute": "href",
+        },
     ],
 }
 
@@ -75,7 +80,7 @@ def _parse_name(full_name: str) -> tuple[str, str]:
     name = full_name.strip()
     for prefix in ("Dr.", "Dr", "DDS", "DMD"):
         if name.startswith(prefix):
-            name = name[len(prefix):].strip(", ")
+            name = name[len(prefix) :].strip(", ")
     parts = name.split(None, 1)
     if len(parts) == 2:
         return parts[0], parts[1]
@@ -119,8 +124,8 @@ class DirectoryScraper:
                 if not cfg:
                     continue
 
-                url = cfg["url_template"].format(city=city.replace(" ", "-").lower())
-                extraction = JsonCssExtractionStrategy(schema=cfg["schema"])
+                url = str(cfg["url_template"]).format(city=city.replace(" ", "-").lower())
+                extraction = JsonCssExtractionStrategy(schema=cfg["schema"])  # type: ignore[arg-type]
                 run_cfg = CrawlerRunConfig(
                     extraction_strategy=extraction,
                     page_timeout=30000,
@@ -132,7 +137,7 @@ class DirectoryScraper:
 
                 try:
                     items = json.loads(result.extracted_content)
-                except (json.JSONDecodeError, TypeError):
+                except json.JSONDecodeError, TypeError:
                     continue
 
                 for item in items[:max_results]:
@@ -164,7 +169,7 @@ class DirectoryScraper:
                         city=addr_city or city,
                         state=state,
                         zip=zipcode,
-                        source=cfg["source"],
+                        source=str(cfg["source"]),
                         source_url=url,
                         notes=f"rating:{item.get('rating', '')}",
                     )

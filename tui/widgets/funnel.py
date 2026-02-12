@@ -18,8 +18,14 @@ STAGE_LABELS = {
 }
 
 STAGE_ORDER = [
-    "lead", "contacted", "replied", "interested",
-    "meeting_booked", "proposal_sent", "closed_won", "closed_lost",
+    "lead",
+    "contacted",
+    "replied",
+    "interested",
+    "meeting_booked",
+    "proposal_sent",
+    "closed_won",
+    "closed_lost",
 ]
 
 

@@ -48,7 +48,13 @@ class ExaScraper:
             # Skip aggregator sites — we want individual practice sites
             if any(
                 skip in domain
-                for skip in ("yelp.com", "healthgrades.com", "zocdoc.com", "facebook.com", "instagram.com")
+                for skip in (
+                    "yelp.com",
+                    "healthgrades.com",
+                    "zocdoc.com",
+                    "facebook.com",
+                    "instagram.com",
+                )
             ):
                 continue
 

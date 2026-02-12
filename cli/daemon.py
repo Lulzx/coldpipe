@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import signal
 
 import typer
@@ -29,11 +30,10 @@ def start():
 
     async def _run_daemon():
         from apscheduler import AsyncScheduler
-        from apscheduler.triggers.interval import IntervalTrigger
         from apscheduler.triggers.cron import CronTrigger
+        from apscheduler.triggers.interval import IntervalTrigger
 
-        from db import get_db
-        from db import queries
+        from db import get_db, queries
 
         async def send_job():
             """Send pending emails across all active campaigns."""
@@ -50,12 +50,13 @@ def start():
                         if mid:
                             by_mailbox.setdefault(mid, []).append(item)
 
-                    from config.settings import SmtpSettings, load_settings
-                    from email_engine.sender import EmailSender
-                    from email_engine.personalize import personalize_opener
-                    from email_engine.templates import render_template
-                    from email_engine.sequences import advance_sequence
                     from jinja2 import Template
+
+                    from config.settings import SmtpSettings, load_settings
+                    from email_engine.personalize import personalize_opener
+                    from email_engine.sender import EmailSender
+                    from email_engine.sequences import advance_sequence
+                    from email_engine.templates import render_template
 
                     settings = load_settings()
 
@@ -72,21 +73,31 @@ def start():
                             continue
 
                         smtp = SmtpSettings(
-                            host=mb.smtp_host, port=mb.smtp_port,
-                            user=mb.smtp_user, password=mb.smtp_pass,
+                            host=mb.smtp_host,
+                            port=mb.smtp_port,
+                            user=mb.smtp_user,
+                            password=mb.smtp_pass,
                         )
-                        async with EmailSender(smtp, from_addr=mb.email, display_name=mb.display_name) as sender:
+                        async with EmailSender(
+                            smtp, from_addr=mb.email, display_name=mb.display_name
+                        ) as sender:
                             for item in items[:remaining]:
                                 try:
                                     opener = await personalize_opener(
                                         item, api_key=settings.anthropic_api_key
                                     )
-                                    context = {**item, "opener": opener, "sender_name": mb.display_name}
+                                    context = {
+                                        **item,
+                                        "opener": opener,
+                                        "sender_name": mb.display_name,
+                                    }
                                     body = render_template(item["template_name"], context)
                                     subject = Template(item["subject"]).render(**context)
 
                                     message_id = await sender.send_with_delay(
-                                        item["email"], subject, body,
+                                        item["email"],
+                                        subject,
+                                        body,
                                     )
 
                                     await advance_sequence(
@@ -115,10 +126,8 @@ def start():
 
                     for mb in mailboxes:
                         if mb.imap_host and mb.imap_user:
-                            try:
+                            with contextlib.suppress(Exception):
                                 await check_replies(db, mb)
-                            except Exception:
-                                pass
             except Exception:
                 pass
 
@@ -131,10 +140,8 @@ def start():
 
                     for mb in mailboxes:
                         if mb.imap_host and mb.imap_user:
-                            try:
+                            with contextlib.suppress(Exception):
                                 await check_bounces(db, mb)
-                            except Exception:
-                                pass
             except Exception:
                 pass
 

@@ -1,4 +1,5 @@
 """Tool 4: Generate personalized cold email opening lines."""
+
 import argparse
 import os
 import sys

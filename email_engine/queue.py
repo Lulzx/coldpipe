@@ -5,9 +5,9 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, time
+from zoneinfo import ZoneInfo
 
 import aiosqlite
-from zoneinfo import ZoneInfo
 
 from config.settings import SendSettings
 from db import queries
@@ -83,9 +83,7 @@ class SendQueue:
 
     async def _effective_limit(self) -> int:
         """Determine how many more emails can be sent today."""
-        sent_today, mailbox_limit = await queries.check_daily_limit(
-            self._db, self._mailbox_id
-        )
+        sent_today, mailbox_limit = await queries.check_daily_limit(self._db, self._mailbox_id)
         daily_cap = mailbox_limit
         if self._warmup_day is not None:
             daily_cap = min(daily_cap, warmup_daily_limit(self._warmup_day))
@@ -113,9 +111,7 @@ class SendQueue:
             log.debug("Queue full, backpressure applied")
             return
 
-        items = await queries.get_send_queue(
-            self._db, self._campaign_id, limit=fetch_limit
-        )
+        items = await queries.get_send_queue(self._db, self._campaign_id, limit=fetch_limit)
         for item in items:
             await self._buffer.put(item)
 
@@ -148,5 +144,5 @@ class SendQueue:
         try:
             item = self._buffer.get_nowait()
             return item
-        except asyncio.QueueEmpty:
-            raise StopAsyncIteration
+        except asyncio.QueueEmpty as exc:
+            raise StopAsyncIteration from exc

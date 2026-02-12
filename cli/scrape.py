@@ -6,7 +6,6 @@ import asyncio
 
 import typer
 from rich.console import Console
-from rich.table import Table
 
 from config import setup_logging
 from db import get_db
@@ -47,11 +46,11 @@ def yelp(
     setup_logging()
 
     async def _scrape():
-        from scrapers.directories import YelpScraper
+        from scrapers.directories import DirectoryScraper as YelpScraper
 
         async with get_db() as db:
             scraper = YelpScraper()
-            leads = await scraper.scrape(db, city=city, pages=pages)
+            leads = await scraper.scrape(db, city=city, max_results=pages * 10)
             console.print(f"[green]Imported {len(leads)} leads from Yelp[/green]")
 
     _run(_scrape())
@@ -65,7 +64,7 @@ def healthgrades(
     setup_logging()
 
     async def _scrape():
-        from scrapers.directories import HealthgradesScraper
+        from scrapers.directories import DirectoryScraper as HealthgradesScraper
 
         async with get_db() as db:
             scraper = HealthgradesScraper()

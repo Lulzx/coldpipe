@@ -71,7 +71,7 @@ async def personalize_opener(
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": _build_user_prompt(lead)}],
         )
-        text = response.content[0].text.strip()
+        text = response.content[0].text.strip()  # type: ignore[union-attr]
         # Enforce word limit
         words = text.split()
         if len(words) > settings.max_opener_words:

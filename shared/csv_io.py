@@ -1,16 +1,22 @@
 import csv
 import os
+from collections.abc import Sequence
 
 # Column detection maps — order matters, first match wins
 _EMAIL_COLS = [
-    "email", "Email (Result)", "Work Email (Result)",
-    "Email Address (Result)", "emails",
+    "email",
+    "Email (Result)",
+    "Work Email (Result)",
+    "Email Address (Result)",
+    "emails",
 ]
 
 _FIRST_NAME_COLS = ["First Name", "first_name"]
 _LAST_NAME_COLS = ["Last Name", "last_name"]
 _COMPANY_COLS = [
-    "Company Name (Result)", "company", "Company",
+    "Company Name (Result)",
+    "company",
+    "Company",
     "Organization Name (Result)",
 ]
 _WEBSITE_COLS = ["URL", "Website (Result)", "url", "website"]
@@ -18,7 +24,7 @@ _JOB_TITLE_COLS = ["Job Title", "job_title"]
 _LOCATION_COLS = ["Location (Result)", "location"]
 
 
-def _find_col(headers: list[str], candidates: list[str]) -> str | None:
+def _find_col(headers: Sequence[str], candidates: list[str]) -> str | None:
     """Return the first header that matches a candidate (case-insensitive)."""
     lower_map = {h.lower().strip(): h for h in headers}
     for c in candidates:
@@ -27,7 +33,7 @@ def _find_col(headers: list[str], candidates: list[str]) -> str | None:
     return None
 
 
-def _detect_name_and_company(headers: list[str]):
+def _detect_name_and_company(headers: Sequence[str]):
     """Handle the 'Title' column ambiguity.
 
     If 'Job Title' exists, 'Title' is the person's name.
@@ -97,16 +103,18 @@ def load_leads(filepath: str) -> list[dict]:
             else:
                 first_name, last_name = "", ""
 
-            rows.append({
-                "email": email,
-                "first_name": first_name,
-                "last_name": last_name,
-                "company": company,
-                "website": website,
-                "job_title": job_title,
-                "location": location,
-                "source_file": source,
-            })
+            rows.append(
+                {
+                    "email": email,
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "company": company,
+                    "website": website,
+                    "job_title": job_title,
+                    "location": location,
+                    "source_file": source,
+                }
+            )
 
     return rows
 
@@ -126,8 +134,14 @@ def load_all_leads(data_dir: str) -> list[dict]:
 
 
 MASTER_FIELDS = [
-    "email", "first_name", "last_name", "company",
-    "website", "job_title", "location", "source_file",
+    "email",
+    "first_name",
+    "last_name",
+    "company",
+    "website",
+    "job_title",
+    "location",
+    "source_file",
 ]
 
 

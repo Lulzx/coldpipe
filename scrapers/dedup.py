@@ -60,9 +60,7 @@ async def deduplicate_leads(db: aiosqlite.Connection) -> int:
 
             # Fuzzy match on company name
             if lead.company and prev.company:
-                score = fuzz.token_sort_ratio(
-                    lead.company.lower(), prev.company.lower()
-                )
+                score = fuzz.token_sort_ratio(lead.company.lower(), prev.company.lower())
                 if score >= FUZZY_THRESHOLD:
                     # Keep the one with more data (lower id = earlier, but prefer one with email)
                     if prev.email and not lead.email:

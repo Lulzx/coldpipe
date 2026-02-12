@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import random
 import uuid
@@ -51,10 +52,8 @@ class EmailSender:
     async def disconnect(self) -> None:
         """Close SMTP connection."""
         if self._client:
-            try:
+            with contextlib.suppress(Exception):
                 await self._client.quit()
-            except Exception:
-                pass
             self._client = None
 
     async def _ensure_connected(self) -> None:
@@ -83,9 +82,7 @@ class EmailSender:
 
         message_id = f"<{uuid.uuid4()}@{self._smtp.host}>"
         from_header = (
-            f"{self._display_name} <{self._from_addr}>"
-            if self._display_name
-            else self._from_addr
+            f"{self._display_name} <{self._from_addr}>" if self._display_name else self._from_addr
         )
 
         msg["From"] = from_header
@@ -111,14 +108,13 @@ class EmailSender:
 
         Returns the generated Message-ID.
         """
-        msg, message_id = self._build_message(
-            to_addr, subject, body, in_reply_to=in_reply_to
-        )
+        msg, message_id = self._build_message(to_addr, subject, body, in_reply_to=in_reply_to)
 
         last_exc: Exception | None = None
         for attempt in range(MAX_RETRIES):
             try:
                 await self._ensure_connected()
+                assert self._client is not None
                 await self._client.send_message(msg)
                 log.info("Sent email to %s (id=%s)", to_addr, message_id)
                 return message_id
@@ -149,9 +145,7 @@ class EmailSender:
         in_reply_to: str | None = None,
     ) -> str:
         """Send then sleep a random delay (30-90s) before returning."""
-        message_id = await self.send(
-            to_addr, subject, body, in_reply_to=in_reply_to
-        )
+        message_id = await self.send(to_addr, subject, body, in_reply_to=in_reply_to)
         delay = random.randint(self._min_delay, self._max_delay)
         log.debug("Sleeping %ds between sends", delay)
         await asyncio.sleep(delay)

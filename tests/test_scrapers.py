@@ -19,8 +19,8 @@ async def test_csv_import(db, tmp_path):
     """Import a CSV file and verify leads are upserted into DB."""
     csv_content = (
         "email,First Name,Last Name,Company Name (Result),URL,Job Title,Location (Result)\n"
-        "alice@smile.com,Alice,Smith,Smile Dental,https://smile.com,Dentist,\"Austin, TX\"\n"
-        "bob@jones.com,Bob,Jones,Jones DDS,https://jones.com,Orthodontist,\"Dallas, TX\"\n"
+        'alice@smile.com,Alice,Smith,Smile Dental,https://smile.com,Dentist,"Austin, TX"\n'
+        'bob@jones.com,Bob,Jones,Jones DDS,https://jones.com,Orthodontist,"Dallas, TX"\n'
     )
     csv_file = tmp_path / "test_leads.csv"
     csv_file.write_text(csv_content)
@@ -72,6 +72,7 @@ async def test_csv_import_dedup_on_email(db, tmp_path):
 
     assert await queries.count_leads(db) == 1
     lead = await queries.get_lead_by_email(db, "alice@smile.com")
+    assert lead is not None
     # Second row has non-empty first_name "Alicia", should overwrite
     assert lead.first_name == "Alicia"
     assert lead.company == "Smile Dental Updated"

@@ -64,7 +64,7 @@ def parse_dsn(raw_bytes: bytes) -> dict | None:
                 # Extract original Message-ID
                 inner = part.get_payload()
                 if isinstance(inner, list) and inner:
-                    original_message_id = inner[0].get("Message-ID", "").strip()
+                    original_message_id = inner[0].get("Message-ID", "").strip()  # type: ignore[union-attr]
                 elif isinstance(inner, Message):
                     original_message_id = inner.get("Message-ID", "").strip()
     else:
@@ -127,11 +127,11 @@ def _get_text_body(msg: Message) -> str:
         for part in msg.walk():
             if part.get_content_type() == "text/plain":
                 payload = part.get_payload(decode=True)
-                if payload:
+                if isinstance(payload, bytes):
                     return payload.decode("utf-8", errors="replace")
         return ""
     payload = msg.get_payload(decode=True)
-    if payload:
+    if isinstance(payload, bytes):
         return payload.decode("utf-8", errors="replace")
     return ""
 
@@ -177,14 +177,10 @@ async def _handle_hard_bounce(
     await queries.update_email_status(db, email_sent_id, "bounced")
 
     # Mark lead email as invalid
-    await db.execute(
-        "UPDATE leads SET email_status = 'invalid' WHERE id = ?", (lead_id,)
-    )
+    await db.execute("UPDATE leads SET email_status = 'invalid' WHERE id = ?", (lead_id,))
 
     # Cancel all campaign_leads for this lead
-    await db.execute(
-        "UPDATE campaign_leads SET status = 'bounced' WHERE lead_id = ?", (lead_id,)
-    )
+    await db.execute("UPDATE campaign_leads SET status = 'bounced' WHERE lead_id = ?", (lead_id,))
     await db.commit()
 
     log.info("Hard bounce: lead %d marked invalid, all campaigns bounced", lead_id)
@@ -223,3 +219,11 @@ async def _handle_soft_bounce(
             lead_id,
             email_sent_id,
         )
+
+
+async def check_bounces(db: aiosqlite.Connection, mb: object) -> int:
+    """Thin wrapper for daemon: check a mailbox for bounce DSNs.
+
+    TODO: implement full IMAP fetch + parse_dsn + process_bounce pipeline.
+    """
+    return 0

@@ -115,6 +115,7 @@ async def upsert_lead(db: aiosqlite.Connection, lead: Lead) -> int:
     await db.commit()
     cursor = await db.execute("SELECT id FROM leads WHERE email = ?", (lead.email,))
     row = await cursor.fetchone()
+    assert row is not None
     return row[0]
 
 
@@ -183,9 +184,15 @@ async def search_leads(db: aiosqlite.Connection, query: str, *, limit: int = 50)
     return [_row_to_struct(r, Lead, _LEAD_COLS) for r in rows]
 
 
-async def count_leads(db: aiosqlite.Connection) -> int:
-    cursor = await db.execute("SELECT COUNT(*) FROM leads")
+async def count_leads(db: aiosqlite.Connection, *, email_status: str | None = None) -> int:
+    q = "SELECT COUNT(*) FROM leads"
+    params: list[str] = []
+    if email_status:
+        q += " WHERE email_status = ?"
+        params.append(email_status)
+    cursor = await db.execute(q, params)
     row = await cursor.fetchone()
+    assert row is not None
     return row[0]
 
 
@@ -251,6 +258,7 @@ async def upsert_mailbox(db: aiosqlite.Connection, mb: Mailbox) -> int:
     await db.commit()
     cursor = await db.execute("SELECT id FROM mailboxes WHERE email = ?", (mb.email,))
     row = await cursor.fetchone()
+    assert row is not None
     return row[0]
 
 
@@ -306,6 +314,7 @@ async def create_campaign(db: aiosqlite.Connection, camp: Campaign) -> int:
         ),
     )
     await db.commit()
+    assert cursor.lastrowid is not None
     return cursor.lastrowid
 
 
@@ -365,6 +374,7 @@ async def add_sequence_step(db: aiosqlite.Connection, step: SequenceStep) -> int
         ),
     )
     await db.commit()
+    assert cursor.lastrowid is not None
     return cursor.lastrowid
 
 
@@ -529,6 +539,7 @@ async def log_send(db: aiosqlite.Connection, es: EmailSent) -> int:
         ),
     )
     await db.commit()
+    assert cursor.lastrowid is not None
     return cursor.lastrowid
 
 
@@ -598,6 +609,7 @@ async def increment_daily_send(db: aiosqlite.Connection, mailbox_id: int) -> int
         (mailbox_id, today),
     )
     row = await cursor.fetchone()
+    assert row is not None
     return row[0]
 
 
@@ -642,6 +654,7 @@ async def upsert_deal(db: aiosqlite.Connection, deal: Deal) -> int:
         ),
     )
     await db.commit()
+    assert cursor.lastrowid is not None
     return cursor.lastrowid
 
 
@@ -679,6 +692,7 @@ async def log_tracking_event(db: aiosqlite.Connection, evt: TrackingEvent) -> in
         (evt.email_sent_id, evt.event_type, evt.metadata),
     )
     await db.commit()
+    assert cursor.lastrowid is not None
     return cursor.lastrowid
 
 
@@ -729,7 +743,9 @@ async def get_lead_stats(db: aiosqlite.Connection) -> dict:
     result["by_city"] = {f"{row[0]}, {row[1]}": row[2] for row in await cursor.fetchall()}
 
     cursor = await db.execute("SELECT COUNT(*) FROM leads")
-    result["total"] = (await cursor.fetchone())[0]
+    total_row = await cursor.fetchone()
+    assert total_row is not None
+    result["total"] = total_row[0]
     return result
 
 
@@ -863,6 +879,7 @@ async def get_today_activity(db: aiosqlite.Connection) -> dict:
         (today,),
     )
     row = await cursor.fetchone()
+    assert row is not None
     return {"sent": row[0] or 0, "replies": row[1] or 0, "bounces": row[2] or 0}
 
 

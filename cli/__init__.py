@@ -66,17 +66,18 @@ def db_backup(
 # Register sub-apps (lazy to avoid circular imports at module level)
 # ---------------------------------------------------------------------------
 
+
 def _register_subapps():
-    from cli.scrape import scrape_app
-    from cli.leads import leads_app
-    from cli.enrich import enrich_app
-    from cli.validate import validate_app
     from cli.campaign import campaign_app
+    from cli.daemon import daemon_app
+    from cli.deals import deals_app
+    from cli.enrich import enrich_app
+    from cli.leads import leads_app
+    from cli.mailbox import mailbox_app
+    from cli.scrape import scrape_app
     from cli.send import send_app
     from cli.track import track_app
-    from cli.deals import deals_app
-    from cli.mailbox import mailbox_app
-    from cli.daemon import daemon_app
+    from cli.validate import validate_app
 
     app.add_typer(scrape_app, name="scrape")
     app.add_typer(leads_app, name="leads")

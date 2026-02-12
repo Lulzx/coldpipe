@@ -18,14 +18,26 @@ from email_engine.sequences import advance_sequence, complete_sequence, handle_r
 async def test_send_queue_fill(db):
     """SendQueue.fill() should populate buffer from DB."""
     lid = await queries.upsert_lead(db, Lead(email="doc@test.com"))
-    mid = await queries.upsert_mailbox(db, Mailbox(
-        email="out@test.com", smtp_host="h", smtp_user="u", smtp_pass="p",
-    ))
+    mid = await queries.upsert_mailbox(
+        db,
+        Mailbox(
+            email="out@test.com",
+            smtp_host="h",
+            smtp_user="u",
+            smtp_pass="p",
+        ),
+    )
     cid = await queries.create_campaign(db, Campaign(name="Camp"))
-    await queries.add_sequence_step(db, SequenceStep(
-        campaign_id=cid, step_number=0, template_name="intro",
-        subject="Hi", delay_days=0,
-    ))
+    await queries.add_sequence_step(
+        db,
+        SequenceStep(
+            campaign_id=cid,
+            step_number=0,
+            template_name="intro",
+            subject="Hi",
+            delay_days=0,
+        ),
+    )
     await queries.enroll_lead(db, cid, lid)
 
     from config.settings import SendSettings
@@ -45,9 +57,15 @@ async def test_send_queue_fill(db):
 @pytest.mark.asyncio
 async def test_send_queue_empty_when_stopped(db):
     await queries.upsert_lead(db, Lead(email="doc@test.com"))
-    mid = await queries.upsert_mailbox(db, Mailbox(
-        email="out@test.com", smtp_host="h", smtp_user="u", smtp_pass="p",
-    ))
+    mid = await queries.upsert_mailbox(
+        db,
+        Mailbox(
+            email="out@test.com",
+            smtp_host="h",
+            smtp_user="u",
+            smtp_pass="p",
+        ),
+    )
     cid = await queries.create_campaign(db, Campaign(name="Camp"))
 
     from config.settings import SendSettings
@@ -64,14 +82,26 @@ async def test_send_queue_empty_when_stopped(db):
 async def test_send_queue_async_iter(db):
     """SendQueue should support async for loop."""
     lid = await queries.upsert_lead(db, Lead(email="doc@test.com"))
-    mid = await queries.upsert_mailbox(db, Mailbox(
-        email="out@test.com", smtp_host="h", smtp_user="u", smtp_pass="p",
-    ))
+    mid = await queries.upsert_mailbox(
+        db,
+        Mailbox(
+            email="out@test.com",
+            smtp_host="h",
+            smtp_user="u",
+            smtp_pass="p",
+        ),
+    )
     cid = await queries.create_campaign(db, Campaign(name="Camp"))
-    await queries.add_sequence_step(db, SequenceStep(
-        campaign_id=cid, step_number=0, template_name="intro",
-        subject="Hi", delay_days=0,
-    ))
+    await queries.add_sequence_step(
+        db,
+        SequenceStep(
+            campaign_id=cid,
+            step_number=0,
+            template_name="intro",
+            subject="Hi",
+            delay_days=0,
+        ),
+    )
     await queries.enroll_lead(db, cid, lid)
 
     from config.settings import SendSettings
@@ -111,14 +141,26 @@ def test_warmup_daily_limit():
 @pytest.mark.asyncio
 async def test_advance_sequence(db):
     lid = await queries.upsert_lead(db, Lead(email="doc@test.com"))
-    mid = await queries.upsert_mailbox(db, Mailbox(
-        email="out@test.com", smtp_host="h", smtp_user="u", smtp_pass="p",
-    ))
+    mid = await queries.upsert_mailbox(
+        db,
+        Mailbox(
+            email="out@test.com",
+            smtp_host="h",
+            smtp_user="u",
+            smtp_pass="p",
+        ),
+    )
     cid = await queries.create_campaign(db, Campaign(name="Camp"))
-    await queries.add_sequence_step(db, SequenceStep(
-        campaign_id=cid, step_number=0, template_name="intro",
-        subject="Hi", delay_days=0,
-    ))
+    await queries.add_sequence_step(
+        db,
+        SequenceStep(
+            campaign_id=cid,
+            step_number=0,
+            template_name="intro",
+            subject="Hi",
+            delay_days=0,
+        ),
+    )
     clid = await queries.enroll_lead(db, cid, lid)
 
     email_id = await advance_sequence(
@@ -164,11 +206,18 @@ async def test_handle_reply(db):
     cid = await queries.create_campaign(db, Campaign(name="Camp"))
     await queries.enroll_lead(db, cid, lid)
 
-    esid = await queries.log_send(db, EmailSent(
-        campaign_id=cid, lead_id=lid, step_number=0,
-        message_id="msg-reply-1", to_email="doc@test.com",
-        from_email="me@test.com", body_text="Hi",
-    ))
+    esid = await queries.log_send(
+        db,
+        EmailSent(
+            campaign_id=cid,
+            lead_id=lid,
+            step_number=0,
+            message_id="msg-reply-1",
+            to_email="doc@test.com",
+            from_email="me@test.com",
+            body_text="Hi",
+        ),
+    )
 
     deal_id = await handle_reply(
         db,
@@ -180,6 +229,7 @@ async def test_handle_reply(db):
 
     # Email should be replied
     es = await queries.get_email_by_message_id(db, "msg-reply-1")
+    assert es is not None
     assert es.status == "replied"
 
     # Campaign lead should be replied (stopped)
@@ -188,6 +238,7 @@ async def test_handle_reply(db):
 
     # Deal should exist
     deal = await queries.get_deal_by_id(db, deal_id)
+    assert deal is not None
     assert deal.stage == "replied"
     assert deal.lead_id == lid
 
@@ -200,10 +251,16 @@ async def test_handle_reply(db):
 @pytest.mark.asyncio
 async def test_daily_limit_enforcement(db):
     """After hitting daily limit, check_daily_limit should return correct values."""
-    mid = await queries.upsert_mailbox(db, Mailbox(
-        email="out@test.com", smtp_host="h", smtp_user="u", smtp_pass="p",
-        daily_limit=3,
-    ))
+    mid = await queries.upsert_mailbox(
+        db,
+        Mailbox(
+            email="out@test.com",
+            smtp_host="h",
+            smtp_user="u",
+            smtp_pass="p",
+            daily_limit=3,
+        ),
+    )
 
     for _ in range(3):
         await queries.increment_daily_send(db, mid)

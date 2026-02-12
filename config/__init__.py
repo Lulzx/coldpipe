@@ -6,7 +6,6 @@ import logging
 
 import structlog
 
-
 _LEVEL_MAP = {
     "DEBUG": logging.DEBUG,
     "INFO": logging.INFO,

@@ -75,9 +75,7 @@ class DashboardScreen(Screen):
             bounces = email_stats.get("bounced", 0)
 
             # Daily limit info
-            cursor2 = await db.execute(
-                "SELECT SUM(daily_limit) FROM mailboxes WHERE is_active = 1"
-            )
+            cursor2 = await db.execute("SELECT SUM(daily_limit) FROM mailboxes WHERE is_active = 1")
             row2 = await cursor2.fetchone()
             daily_cap = row2[0] if row2 and row2[0] else 0
 
@@ -100,19 +98,9 @@ class DashboardScreen(Screen):
         reply_pct = f"({replies / total_sent * 100:.0f}%)" if total_sent > 0 else ""
         bounce_pct = f"({bounces / total_sent * 100:.0f}%)" if total_sent > 0 else ""
 
-        self.query_one("#stat-sent", StatCard).update_value(
-            f"{total_sent} / {daily_cap}"
-        )
-        self.query_one("#stat-replies", StatCard).update_value(
-            f"{replies}", reply_pct
-        )
-        self.query_one("#stat-bounces", StatCard).update_value(
-            f"{bounces}", bounce_pct
-        )
+        self.query_one("#stat-sent", StatCard).update_value(f"{total_sent} / {daily_cap}")
+        self.query_one("#stat-replies", StatCard).update_value(f"{replies}", reply_pct)
+        self.query_one("#stat-bounces", StatCard).update_value(f"{bounces}", bounce_pct)
         self.query_one("#stat-new-leads", StatCard).update_value(f"{new_leads}")
-        self.query_one("#stat-rev-pipeline", StatCard).update_value(
-            f"${pipeline_rev:,.0f}"
-        )
-        self.query_one("#stat-rev-closed", StatCard).update_value(
-            f"${closed_rev:,.0f}"
-        )
+        self.query_one("#stat-rev-pipeline", StatCard).update_value(f"${pipeline_rev:,.0f}")
+        self.query_one("#stat-rev-closed", StatCard).update_value(f"${closed_rev:,.0f}")

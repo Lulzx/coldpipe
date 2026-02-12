@@ -22,14 +22,19 @@ from db.models import (
 
 @pytest.mark.asyncio
 async def test_schema_tables_exist(db):
-    cursor = await db.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-    )
+    cursor = await db.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
     tables = {r[0] for r in await cursor.fetchall()}
     expected = {
-        "leads", "mailboxes", "campaigns", "sequence_steps",
-        "campaign_leads", "emails_sent", "deals", "tracking_events",
-        "daily_send_log", "schema_version",
+        "leads",
+        "mailboxes",
+        "campaigns",
+        "sequence_steps",
+        "campaign_leads",
+        "emails_sent",
+        "deals",
+        "tracking_events",
+        "daily_send_log",
+        "schema_version",
     }
     assert expected.issubset(tables)
 
@@ -65,10 +70,13 @@ async def test_upsert_lead_merge(db):
     lead = Lead(email="doc@test.com", first_name="Doc", last_name="Brown", company="DDS")
     await queries.upsert_lead(db, lead)
 
-    update = Lead(email="doc@test.com", first_name="", last_name="", company="New Corp", city="Austin")
+    update = Lead(
+        email="doc@test.com", first_name="", last_name="", company="New Corp", city="Austin"
+    )
     lid = await queries.upsert_lead(db, update)
 
     fetched = await queries.get_lead_by_id(db, lid)
+    assert fetched is not None
     assert fetched.first_name == "Doc"  # kept
     assert fetched.company == "New Corp"  # updated
     assert fetched.city == "Austin"  # added
@@ -135,6 +143,7 @@ async def test_lead_email_uniqueness(db):
     await queries.upsert_lead(db, Lead(email="dup@test.com", first_name="Second"))
     assert await queries.count_leads(db) == 1
     lead = await queries.get_lead_by_email(db, "dup@test.com")
+    assert lead is not None
     assert lead.first_name == "Second"
 
 
@@ -147,6 +156,7 @@ async def test_lead_email_uniqueness(db):
 async def test_updated_at_trigger(db):
     lid = await queries.upsert_lead(db, Lead(email="trigger@test.com"))
     lead1 = await queries.get_lead_by_id(db, lid)
+    assert lead1 is not None
     original_updated = lead1.updated_at
 
     # Update lead to trigger the updated_at trigger
@@ -154,6 +164,7 @@ async def test_updated_at_trigger(db):
     await db.commit()
 
     lead2 = await queries.get_lead_by_id(db, lid)
+    assert lead2 is not None
     assert lead2.updated_at >= original_updated
 
 
@@ -165,13 +176,16 @@ async def test_updated_at_trigger(db):
 @pytest.mark.asyncio
 async def test_upsert_mailbox(db):
     mb = Mailbox(
-        email="out@clinic.com", smtp_host="smtp.gmail.com",
-        smtp_user="user", smtp_pass="pass",
+        email="out@clinic.com",
+        smtp_host="smtp.gmail.com",
+        smtp_user="user",
+        smtp_pass="pass",
     )
     mid = await queries.upsert_mailbox(db, mb)
     assert mid > 0
 
     fetched = await queries.get_mailbox_by_id(db, mid)
+    assert fetched is not None
     assert fetched.email == "out@clinic.com"
     assert fetched.daily_limit == 30
     assert fetched.warmup_day == 0
@@ -179,12 +193,26 @@ async def test_upsert_mailbox(db):
 
 @pytest.mark.asyncio
 async def test_get_mailboxes_active(db):
-    await queries.upsert_mailbox(db, Mailbox(
-        email="a@test.com", smtp_host="h", smtp_user="u", smtp_pass="p", is_active=1,
-    ))
-    await queries.upsert_mailbox(db, Mailbox(
-        email="b@test.com", smtp_host="h", smtp_user="u", smtp_pass="p", is_active=0,
-    ))
+    await queries.upsert_mailbox(
+        db,
+        Mailbox(
+            email="a@test.com",
+            smtp_host="h",
+            smtp_user="u",
+            smtp_pass="p",
+            is_active=1,
+        ),
+    )
+    await queries.upsert_mailbox(
+        db,
+        Mailbox(
+            email="b@test.com",
+            smtp_host="h",
+            smtp_user="u",
+            smtp_pass="p",
+            is_active=0,
+        ),
+    )
     all_mb = await queries.get_mailboxes(db)
     assert len(all_mb) == 2
     active = await queries.get_mailboxes(db, active_only=True)
@@ -204,6 +232,7 @@ async def test_create_campaign(db):
     assert cid > 0
 
     fetched = await queries.get_campaign_by_id(db, cid)
+    assert fetched is not None
     assert fetched.name == "Test Campaign"
     assert fetched.daily_limit == 25
     assert fetched.status == "draft"
@@ -215,6 +244,7 @@ async def test_update_campaign_status(db):
     ok = await queries.update_campaign_status(db, cid, "active")
     assert ok
     camp = await queries.get_campaign_by_id(db, cid)
+    assert camp is not None
     assert camp.status == "active"
 
 
@@ -234,14 +264,27 @@ async def test_campaign_status_constraint(db):
 @pytest.mark.asyncio
 async def test_add_sequence_steps(db):
     cid = await queries.create_campaign(db, Campaign(name="Camp"))
-    await queries.add_sequence_step(db, SequenceStep(
-        campaign_id=cid, step_number=0, template_name="intro",
-        subject="Hello", delay_days=0,
-    ))
-    await queries.add_sequence_step(db, SequenceStep(
-        campaign_id=cid, step_number=1, template_name="followup",
-        subject="Just checking in", delay_days=3, is_reply=1,
-    ))
+    await queries.add_sequence_step(
+        db,
+        SequenceStep(
+            campaign_id=cid,
+            step_number=0,
+            template_name="intro",
+            subject="Hello",
+            delay_days=0,
+        ),
+    )
+    await queries.add_sequence_step(
+        db,
+        SequenceStep(
+            campaign_id=cid,
+            step_number=1,
+            template_name="followup",
+            subject="Just checking in",
+            delay_days=3,
+            is_reply=1,
+        ),
+    )
 
     steps = await queries.get_sequence_steps(db, cid)
     assert len(steps) == 2
@@ -306,10 +349,16 @@ async def test_advance_step(db):
 async def test_send_queue(db):
     lid = await queries.upsert_lead(db, Lead(email="doc@test.com", first_name="Doc"))
     cid = await queries.create_campaign(db, Campaign(name="Camp"))
-    await queries.add_sequence_step(db, SequenceStep(
-        campaign_id=cid, step_number=0, template_name="intro",
-        subject="Hi", delay_days=0,
-    ))
+    await queries.add_sequence_step(
+        db,
+        SequenceStep(
+            campaign_id=cid,
+            step_number=0,
+            template_name="intro",
+            subject="Hi",
+            delay_days=0,
+        ),
+    )
     await queries.enroll_lead(db, cid, lid)
 
     queue = await queries.get_send_queue(db, cid)
@@ -327,8 +376,12 @@ async def test_send_queue(db):
 async def test_log_send_and_fetch(db):
     lid = await queries.upsert_lead(db, Lead(email="e@test.com"))
     es = EmailSent(
-        lead_id=lid, subject="Hello", to_email="e@test.com",
-        from_email="me@test.com", body_text="Body", message_id="msg-123",
+        lead_id=lid,
+        subject="Hello",
+        to_email="e@test.com",
+        from_email="me@test.com",
+        body_text="Body",
+        message_id="msg-123",
     )
     esid = await queries.log_send(db, es)
     assert esid > 0
@@ -342,14 +395,21 @@ async def test_log_send_and_fetch(db):
 @pytest.mark.asyncio
 async def test_update_email_status_replied(db):
     lid = await queries.upsert_lead(db, Lead(email="e@test.com"))
-    esid = await queries.log_send(db, EmailSent(
-        lead_id=lid, message_id="msg-r", to_email="e@test.com",
-        from_email="me@test.com", body_text="Hi",
-    ))
+    esid = await queries.log_send(
+        db,
+        EmailSent(
+            lead_id=lid,
+            message_id="msg-r",
+            to_email="e@test.com",
+            from_email="me@test.com",
+            body_text="Hi",
+        ),
+    )
     ok = await queries.update_email_status(db, esid, "replied")
     assert ok
 
     fetched = await queries.get_email_by_message_id(db, "msg-r")
+    assert fetched is not None
     assert fetched.status == "replied"
     assert fetched.replied_at is not None
 
@@ -357,14 +417,21 @@ async def test_update_email_status_replied(db):
 @pytest.mark.asyncio
 async def test_update_email_status_bounced(db):
     lid = await queries.upsert_lead(db, Lead(email="e@test.com"))
-    esid = await queries.log_send(db, EmailSent(
-        lead_id=lid, message_id="msg-b", to_email="e@test.com",
-        from_email="me@test.com", body_text="Hi",
-    ))
+    esid = await queries.log_send(
+        db,
+        EmailSent(
+            lead_id=lid,
+            message_id="msg-b",
+            to_email="e@test.com",
+            from_email="me@test.com",
+            body_text="Hi",
+        ),
+    )
     ok = await queries.update_email_status(db, esid, "bounced")
     assert ok
 
     fetched = await queries.get_email_by_message_id(db, "msg-b")
+    assert fetched is not None
     assert fetched.status == "bounced"
     assert fetched.bounced_at is not None
 
@@ -376,9 +443,15 @@ async def test_update_email_status_bounced(db):
 
 @pytest.mark.asyncio
 async def test_daily_limit(db):
-    mid = await queries.upsert_mailbox(db, Mailbox(
-        email="out@test.com", smtp_host="h", smtp_user="u", smtp_pass="p",
-    ))
+    mid = await queries.upsert_mailbox(
+        db,
+        Mailbox(
+            email="out@test.com",
+            smtp_host="h",
+            smtp_user="u",
+            smtp_pass="p",
+        ),
+    )
 
     sent, limit = await queries.check_daily_limit(db, mid)
     assert sent == 0
@@ -410,6 +483,7 @@ async def test_deal_upsert_and_update(db):
     assert did2 == did
 
     fetched = await queries.get_deal_by_id(db, did)
+    assert fetched is not None
     assert fetched.stage == "replied"
     assert fetched.value == 5000.0
     assert fetched.notes == "Good prospect"
@@ -419,7 +493,7 @@ async def test_deal_upsert_and_update(db):
 async def test_deal_stage_constraint(db):
     lid = await queries.upsert_lead(db, Lead(email="e@test.com"))
     with pytest.raises(Exception, match="CHECK"):
-        await queries.upsert_deal(db, Deal(lead_id=lid, stage="INVALID"))
+        await queries.upsert_deal(db, Deal(lead_id=lid, stage="INVALID"))  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio
@@ -444,14 +518,25 @@ async def test_pipeline_stats(db):
 @pytest.mark.asyncio
 async def test_log_tracking_event(db):
     lid = await queries.upsert_lead(db, Lead(email="e@test.com"))
-    esid = await queries.log_send(db, EmailSent(
-        lead_id=lid, message_id="msg-t", to_email="e@test.com",
-        from_email="me@test.com", body_text="Hi",
-    ))
+    esid = await queries.log_send(
+        db,
+        EmailSent(
+            lead_id=lid,
+            message_id="msg-t",
+            to_email="e@test.com",
+            from_email="me@test.com",
+            body_text="Hi",
+        ),
+    )
 
-    tid = await queries.log_tracking_event(db, TrackingEvent(
-        email_sent_id=esid, event_type="reply", metadata='{"detail": "test"}',
-    ))
+    tid = await queries.log_tracking_event(
+        db,
+        TrackingEvent(
+            email_sent_id=esid,
+            event_type="reply",
+            metadata='{"detail": "test"}',
+        ),
+    )
     assert tid > 0
 
 
@@ -490,6 +575,7 @@ async def test_tag_leads(db):
     assert count == 2
 
     lead = await queries.get_lead_by_id(db, lid1)
+    assert lead is not None
     assert "vip" in lead.tags
 
     # Tagging again should not duplicate
@@ -499,12 +585,19 @@ async def test_tag_leads(db):
 
 @pytest.mark.asyncio
 async def test_deactivate_mailbox(db):
-    mid = await queries.upsert_mailbox(db, Mailbox(
-        email="m@test.com", smtp_host="h", smtp_user="u", smtp_pass="p",
-    ))
+    mid = await queries.upsert_mailbox(
+        db,
+        Mailbox(
+            email="m@test.com",
+            smtp_host="h",
+            smtp_user="u",
+            smtp_pass="p",
+        ),
+    )
     ok = await queries.deactivate_mailbox(db, mid)
     assert ok
     mb = await queries.get_mailbox_by_id(db, mid)
+    assert mb is not None
     assert mb.is_active == 0
 
 

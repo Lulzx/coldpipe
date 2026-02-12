@@ -10,8 +10,7 @@ from rich.table import Table
 
 from config import setup_logging
 from config.settings import load_settings
-from db import get_db
-from db import queries
+from db import get_db, queries
 
 console = Console()
 send_app = typer.Typer(help="Email sending commands.")
@@ -43,9 +42,13 @@ def preview(
                     return
                 step = steps[0]
                 lead_dict = {
-                    "first_name": lead.first_name, "last_name": lead.last_name,
-                    "company": lead.company, "city": lead.city, "state": lead.state,
-                    "job_title": lead.job_title, "website": lead.website,
+                    "first_name": lead.first_name,
+                    "last_name": lead.last_name,
+                    "company": lead.company,
+                    "city": lead.city,
+                    "state": lead.state,
+                    "job_title": lead.job_title,
+                    "website": lead.website,
                     "email": lead.email,
                 }
             else:
@@ -55,19 +58,24 @@ def preview(
                     return
                 item = queue[0]
                 lead_dict = item
-                step = type("Step", (), {"template_name": item["template_name"], "subject": item["subject"]})()
+                step = type(
+                    "Step", (), {"template_name": item["template_name"], "subject": item["subject"]}
+                )()
 
             # Generate opener
             from email_engine.personalize import personalize_opener
 
-            opener = await personalize_opener(
-                lead_dict, api_key=settings.anthropic_api_key
-            )
+            opener = await personalize_opener(lead_dict, api_key=settings.anthropic_api_key)
 
             # Render template
             from email_engine.templates import render_template
 
-            context = {**lead_dict, "opener": opener, "sender_name": "Your Name", "sender_title": ""}
+            context = {
+                **lead_dict,
+                "opener": opener,
+                "sender_name": "Your Name",
+                "sender_title": "",
+            }
             body = render_template(step.template_name, context)
 
             # Render subject
@@ -101,7 +109,9 @@ def run(
                 return
 
             if campaign.status != "active":
-                console.print(f"[yellow]Campaign is '{campaign.status}', not 'active'. Activate first.[/yellow]")
+                console.print(
+                    f"[yellow]Campaign is '{campaign.status}', not 'active'. Activate first.[/yellow]"
+                )
                 return
 
             queue = await queries.get_send_queue(db, campaign_id, limit=limit)
@@ -127,24 +137,29 @@ def run(
                 console.print(table)
                 return
 
-            mailbox = await queries.get_mailbox_by_id(db, campaign.mailbox_id)
+            mailbox = await queries.get_mailbox_by_id(db, campaign.mailbox_id)  # type: ignore[arg-type]
             if not mailbox:
                 console.print("[red]No mailbox configured for this campaign[/red]")
                 return
 
-            from config.settings import SmtpSettings
-            from email_engine.sender import EmailSender
-            from email_engine.personalize import personalize_opener
-            from email_engine.templates import render_template
-            from email_engine.sequences import advance_sequence
             from jinja2 import Template
 
+            from config.settings import SmtpSettings
+            from email_engine.personalize import personalize_opener
+            from email_engine.sender import EmailSender
+            from email_engine.sequences import advance_sequence
+            from email_engine.templates import render_template
+
             smtp = SmtpSettings(
-                host=mailbox.smtp_host, port=mailbox.smtp_port,
-                user=mailbox.smtp_user, password=mailbox.smtp_pass,
+                host=mailbox.smtp_host,
+                port=mailbox.smtp_port,
+                user=mailbox.smtp_user,
+                password=mailbox.smtp_pass,
             )
 
-            async with EmailSender(smtp, from_addr=mailbox.email, display_name=mailbox.display_name) as sender:
+            async with EmailSender(
+                smtp, from_addr=mailbox.email, display_name=mailbox.display_name
+            ) as sender:
                 sent_count = 0
                 for item in queue:
                     try:
@@ -155,9 +170,7 @@ def run(
                             break
 
                         # Personalize
-                        opener = await personalize_opener(
-                            item, api_key=settings.anthropic_api_key
-                        )
+                        opener = await personalize_opener(item, api_key=settings.anthropic_api_key)
 
                         # Render
                         context = {**item, "opener": opener, "sender_name": mailbox.display_name}
@@ -166,7 +179,9 @@ def run(
 
                         # Send
                         message_id = await sender.send_with_delay(
-                            item["email"], subject, body,
+                            item["email"],
+                            subject,
+                            body,
                         )
 
                         # Advance sequence
@@ -221,7 +236,7 @@ def status():
     async def _status():
         async with get_db() as db:
             activity = await queries.get_today_activity(db)
-            console.print(f"\n[bold]Today's Activity[/bold]")
+            console.print("\n[bold]Today's Activity[/bold]")
             console.print(f"  Sent: {activity['sent']}")
             console.print(f"  Replies: {activity['replies']}")
             console.print(f"  Bounces: {activity['bounces']}")

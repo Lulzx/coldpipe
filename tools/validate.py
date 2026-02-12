@@ -200,7 +200,7 @@ def main():
     leads = load_leads(args.input)
     print(f"  {len(leads)} leads loaded")
 
-    emails_to_check = sum(1 for l in leads if l.get("email") or l.get("enriched_email"))
+    emails_to_check = sum(1 for row in leads if row.get("email") or row.get("enriched_email"))
     print(f"  {emails_to_check} emails to validate")
 
     start = time.time()

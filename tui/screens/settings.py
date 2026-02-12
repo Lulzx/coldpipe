@@ -122,9 +122,7 @@ class SettingsScreen(Screen):
         if row_key is not None:
             mailbox_id = int(str(row_key.value))
             self._editing_mailbox_id = mailbox_id
-            self.run_worker(
-                self._load_mailbox_form(mailbox_id), exclusive=True, group="form"
-            )
+            self.run_worker(self._load_mailbox_form(mailbox_id), exclusive=True, group="form")
 
     async def _load_mailbox_form(self, mailbox_id: int) -> None:
         async with self._pool.acquire() as db:

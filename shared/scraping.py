@@ -1,5 +1,5 @@
 import asyncio
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urljoin, urlparse
 
 from lxml.html import fromstring as parse_html
 

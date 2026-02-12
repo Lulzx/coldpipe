@@ -120,10 +120,7 @@ class CampaignsScreen(Screen):
         for cl in camp_leads:
             lead_counts_by_step[cl.current_step] = lead_counts_by_step.get(cl.current_step, 0) + 1
 
-        step_dicts = [
-            {"step_number": s.step_number, "subject_tpl": s.subject_tpl}
-            for s in steps
-        ]
+        step_dicts = [{"step_number": s.step_number, "subject": s.subject} for s in steps]
         total = len(camp_leads)
         with suppress(Exception):
             progress = self.query_one("#camp-progress", CampaignProgress)
@@ -135,7 +132,7 @@ class CampaignsScreen(Screen):
             count = lead_counts_by_step.get(s.step_number, 0)
             step_lines.append(
                 f"  Step {s.step_number} (delay: {s.delay_days}d): "
-                f"{s.subject_tpl[:40]} -- {count} leads"
+                f"{s.subject[:40]} -- {count} leads"
             )
         with suppress(Exception):
             self.query_one("#step-stats", Static).update("\n".join(step_lines))

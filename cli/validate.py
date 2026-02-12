@@ -9,8 +9,7 @@ from rich.console import Console
 from rich.progress import Progress
 
 from config import setup_logging
-from db import get_db
-from db import queries
+from db import get_db, queries
 
 console = Console()
 validate_app = typer.Typer(help="Validate lead email addresses.")
@@ -33,7 +32,7 @@ def run(
         async with get_db() as db:
             # Find leads with unknown email status that have emails
             leads = await queries.get_leads(db, limit=batch_size, email_status="unknown")
-            to_validate = [l for l in leads if l.email]
+            to_validate = [lead for lead in leads if lead.email]
 
             if not to_validate:
                 console.print("[yellow]No emails to validate[/yellow]")
@@ -47,8 +46,8 @@ def run(
                 task = progress.add_task("Validating...", total=len(to_validate))
                 for lead in to_validate:
                     try:
-                        result = await validator.validate(lead.email)
-                        status = result.get("status", "unknown")
+                        result = await validator.validate_email(lead.email)
+                        status = result.get("validation_status", "unknown")
                         # Map validator statuses to our schema
                         status_map = {
                             "valid": "valid",

@@ -19,7 +19,7 @@ from shared.scoring import EmailCandidate, pick_best
 from shared.scraping import scrape_site_for_emails
 from tools.validate import EmailValidator
 
-sys.stdout.reconfigure(line_buffering=True)
+sys.stdout.reconfigure(line_buffering=True)  # type: ignore[union-attr]
 
 CONCURRENCY = 50
 
@@ -101,7 +101,7 @@ async def main():
 
     with open(csv_file, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
-        fieldnames = list(reader.fieldnames)
+        fieldnames = list(reader.fieldnames or [])
         all_rows = list(reader)
 
     # Auto-detect column names

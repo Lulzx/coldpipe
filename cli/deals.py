@@ -9,8 +9,7 @@ from rich.console import Console
 from rich.table import Table
 
 from config import setup_logging
-from db import get_db
-from db import queries
+from db import get_db, queries
 from db.models import Deal
 
 console = Console()
@@ -41,8 +40,11 @@ def list_deals(
 
             for deal in deals:
                 table.add_row(
-                    str(deal.id), str(deal.lead_id), deal.stage,
-                    f"${deal.value:,.0f}", deal.notes[:40],
+                    str(deal.id),
+                    str(deal.lead_id),
+                    deal.stage,
+                    f"${deal.value:,.0f}",
+                    deal.notes[:40],
                     deal.created_at[:10] if deal.created_at else "-",
                 )
             console.print(table)
@@ -62,7 +64,7 @@ def create(
 
     async def _create():
         async with get_db() as db:
-            deal = Deal(lead_id=lead_id, stage=stage, value=value, notes=notes)
+            deal = Deal(lead_id=lead_id, stage=stage, value=value, notes=notes)  # type: ignore[arg-type]
             deal_id = await queries.upsert_deal(db, deal)
             console.print(f"[green]Created deal {deal_id} for lead {lead_id}[/green]")
 
@@ -84,8 +86,12 @@ def move(
                 console.print(f"[red]Deal {deal_id} not found[/red]")
                 return
             deal = Deal(
-                id=deal.id, lead_id=deal.lead_id, campaign_id=deal.campaign_id,
-                stage=stage, value=deal.value, notes=deal.notes,
+                id=deal.id,
+                lead_id=deal.lead_id,
+                campaign_id=deal.campaign_id,
+                stage=stage,  # type: ignore[arg-type]
+                value=deal.value,
+                notes=deal.notes,
             )
             await queries.upsert_deal(db, deal)
             console.print(f"[green]Deal {deal_id} moved to '{stage}'[/green]")
@@ -111,8 +117,11 @@ def close(
                 return
             stage = "closed_won" if won else "closed_lost"
             updated = Deal(
-                id=deal.id, lead_id=deal.lead_id, campaign_id=deal.campaign_id,
-                stage=stage, value=value if value else deal.value,
+                id=deal.id,
+                lead_id=deal.lead_id,
+                campaign_id=deal.campaign_id,
+                stage=stage,
+                value=value if value else deal.value,
                 loss_reason=reason if not won else None,
                 notes=deal.notes,
             )
@@ -133,7 +142,7 @@ def stats():
             s = await queries.get_deal_stats(db)
             stages = s.get("stages", {})
 
-            console.print(f"\n[bold]Deal Pipeline[/bold]")
+            console.print("\n[bold]Deal Pipeline[/bold]")
             console.print(f"  Pipeline value: ${s.get('pipeline_value', 0):,.0f}")
             console.print(f"  Closed value:   ${s.get('closed_value', 0):,.0f}")
 

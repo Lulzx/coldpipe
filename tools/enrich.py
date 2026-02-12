@@ -1,4 +1,5 @@
 """Tool 2: Find missing emails by scraping company websites."""
+
 import argparse
 import asyncio
 import os
@@ -7,11 +8,11 @@ import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from shared.csv_io import load_leads, save_csv, MASTER_FIELDS
+from shared.csv_io import MASTER_FIELDS, load_leads, save_csv
 from shared.http import create_sessions
 from shared.scraping import scrape_site_for_emails
 
-ENRICH_FIELDS = MASTER_FIELDS + ["enriched_email", "email_source"]
+ENRICH_FIELDS = [*MASTER_FIELDS, "enriched_email", "email_source"]
 
 
 async def enrich_leads(leads: list[dict], concurrency: int = 500) -> list[dict]:

@@ -9,8 +9,7 @@ from rich.console import Console
 from rich.table import Table
 
 from config import setup_logging
-from db import get_db
-from db import queries
+from db import get_db, queries
 
 console = Console()
 track_app = typer.Typer(help="Email tracking commands (replies + bounces).")

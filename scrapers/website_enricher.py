@@ -13,7 +13,7 @@ from crawl4ai.extraction_strategy import LLMExtractionStrategy
 
 from db.models import Lead
 from db.queries import get_leads, upsert_lead
-from shared.email_utils import extract_emails, is_junk
+from shared.email_utils import is_junk
 from shared.http import create_sessions
 from shared.patterns import generate_candidates
 from shared.scoring import EmailCandidate, pick_best
@@ -85,7 +85,9 @@ class WebsiteEnricher:
             offset += 100
 
         # Filter to leads with website but missing key data
-        targets = [l for l in all_leads if l.website and (not l.email or not l.phone)][:limit]
+        targets = [
+            lead for lead in all_leads if lead.website and (not lead.email or not lead.phone)
+        ][:limit]
 
         if not targets:
             return []
@@ -152,12 +154,9 @@ class WebsiteEnricher:
                 # Apply enrichment data to lead
                 emails = [e for e in data.get("emails", []) if not is_junk(e)]
                 if emails and not lead.email:
-                    lead = Lead(
-                        **{
-                            **{k: getattr(lead, k) for k in lead.__struct_fields__},
-                            "email": emails[0],
-                        }
-                    )
+                    fields = {k: getattr(lead, k) for k in lead.__struct_fields__}
+                    fields["email"] = emails[0]
+                    lead = Lead(**fields)
 
                 updates: dict = {}
                 if data.get("phone") and not lead.phone:
@@ -204,12 +203,9 @@ class WebsiteEnricher:
                 )
 
                 if updates:
-                    updated = Lead(
-                        **{
-                            **{k: getattr(lead, k) for k in lead.__struct_fields__},
-                            **updates,
-                        }
-                    )
+                    fields = {k: getattr(lead, k) for k in lead.__struct_fields__}
+                    fields.update(updates)
+                    updated = Lead(**fields)
                     await upsert_lead(db, updated)
                     enriched.append(updated)
 
@@ -223,10 +219,10 @@ class WebsiteEnricher:
     ) -> dict | None:
         """Run Crawl4AI deep crawl + LLM extraction on a site."""
         try:
-            results = await crawler.arun(url=url, config=run_cfg)
-            if not results.extracted_content:
+            results = await crawler.arun(url=url, config=run_cfg)  # type: ignore[arg-type]
+            if not results.extracted_content:  # type: ignore[union-attr]
                 return None
-            data = json.loads(results.extracted_content)
+            data = json.loads(results.extracted_content)  # type: ignore[union-attr]
             if isinstance(data, list):
                 # Merge multiple page extractions
                 merged: dict = {

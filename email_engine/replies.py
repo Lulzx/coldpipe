@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import email
 import logging
 from email.message import Message
@@ -54,10 +55,8 @@ class ReplyWatcher:
     async def disconnect(self) -> None:
         """Close IMAP connection."""
         if self._client:
-            try:
+            with contextlib.suppress(Exception):
                 await self._client.logout()
-            except Exception:
-                pass
             self._client = None
 
     def stop(self) -> None:
@@ -84,6 +83,7 @@ class ReplyWatcher:
 
         Returns True if the message matched a sent email.
         """
+        assert self._client is not None
         result, data = await self._client.uid("fetch", uid, "(RFC822)")
         if result != "OK" or not data:
             return False
@@ -135,6 +135,7 @@ class ReplyWatcher:
         if self._client is None:
             await self.connect()
 
+        assert self._client is not None
         result, data = await self._client.uid("search", "UNSEEN")
         if result != "OK":
             log.warning("IMAP search failed: %s", result)
@@ -180,3 +181,21 @@ class ReplyWatcher:
     async def __aexit__(self, *exc) -> None:
         self.stop()
         await self.disconnect()
+
+
+async def check_replies(db: aiosqlite.Connection, mb: object) -> int:
+    """Thin wrapper for daemon: poll a mailbox for replies. Returns matched count."""
+    watcher = ReplyWatcher(
+        db,
+        ImapSettings(
+            host=getattr(mb, "imap_host", ""),
+            port=getattr(mb, "imap_port", 993),
+            user=getattr(mb, "imap_user", ""),
+            password=getattr(mb, "imap_pass", ""),
+        ),
+    )
+    await watcher.connect()
+    try:
+        return await watcher.poll_once()
+    finally:
+        await watcher.disconnect()

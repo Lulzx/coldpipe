@@ -4,15 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import csv
-import sys
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
 from config import setup_logging
-from db import get_db
-from db import queries
+from db import get_db, queries
 
 console = Console()
 leads_app = typer.Typer(help="Lead management commands.")
@@ -88,8 +86,11 @@ def search(
             for lead in leads:
                 name = f"{lead.first_name} {lead.last_name}".strip()
                 table.add_row(
-                    str(lead.id), name, lead.company,
-                    lead.email or "-", lead.email_status,
+                    str(lead.id),
+                    name,
+                    lead.company,
+                    lead.email or "-",
+                    lead.email_status,
                 )
 
             console.print(table)
@@ -108,12 +109,24 @@ def export(
     async def _export():
         async with get_db() as db:
             leads = await queries.get_leads(
-                db, limit=100000, email_status=status or None,
+                db,
+                limit=100000,
+                email_status=status or None,
             )
             fieldnames = [
-                "id", "email", "first_name", "last_name", "company",
-                "job_title", "website", "phone", "city", "state",
-                "email_status", "tags", "source",
+                "id",
+                "email",
+                "first_name",
+                "last_name",
+                "company",
+                "job_title",
+                "website",
+                "phone",
+                "city",
+                "state",
+                "email_status",
+                "tags",
+                "source",
             ]
             with open(output, "w", newline="") as f:
                 writer = csv.DictWriter(f, fieldnames=fieldnames)
