@@ -1,0 +1,42 @@
+[project]
+name = "dentists"
+version = "2.0.0"
+description = "Customer Acquisition Engine for dental practices"
+requires-python = ">=3.14"
+dependencies = [
+    "aiohttp>=3.9",
+    "lxml>=5.0",
+    "aiodns>=3.0",
+    "aiosmtplib>=3.0",
+    "typer>=0.12",
+    "rich>=13.0",
+    "textual>=0.80",
+    "aiosqlite>=0.22",
+    "msgspec>=0.20",
+    "crawl4ai>=0.8",
+    "anthropic>=0.40",
+    "jinja2>=3.1",
+    "aioimaplib>=2.0",
+    "rapidfuzz>=3.0",
+    "apscheduler>=4.0a1",
+    "pydantic-settings>=2.0",
+    "structlog>=24.0",
+]
+
+[project.scripts]
+dentists = "cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["cli", "db", "scrapers", "email_engine", "tui", "config", "shared", "tools"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.8",
+    "pyright>=1.1",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+]

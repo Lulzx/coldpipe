@@ -1,0 +1,37 @@
+# Dentists Customer Acquisition Engine - Configuration
+# Copy to dentists.toml and fill in your values.
+
+anthropic_api_key = ""
+exa_api_key = ""
+log_level = "INFO"
+log_json = false
+
+[smtp]
+host = "smtp.gmail.com"
+port = 587
+user = ""
+password = ""
+
+[imap]
+host = "imap.gmail.com"
+port = 993
+user = ""
+password = ""
+
+[send]
+daily_limit = 30
+send_window_start = "08:00"
+send_window_end = "17:00"
+timezone = "America/New_York"
+min_delay_seconds = 30
+max_delay_seconds = 90
+
+[llm]
+model = "claude-sonnet-4-20250514"
+max_concurrent = 5
+max_opener_words = 30
+
+[scraper]
+max_concurrent = 500
+timeout = 5
+dedup_threshold = 85

@@ -1,0 +1,9 @@
+Hi {{ first_name }},
+
+I've reached out a few times and haven't heard back, so I'll assume the timing isn't right.
+
+If things change down the road and {{ company }} is looking to bring in more patients, feel free to reply to this email. I'll be here.
+
+Wishing you and your team all the best.
+
+{{ sender_name }}

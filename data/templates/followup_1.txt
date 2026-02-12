@@ -1,0 +1,10 @@
+Hi {{ first_name }},
+
+I wanted to follow up on my last email. I know things get busy running a practice.
+
+I recently helped a {{ state }} dental office add 47 new implant consultations in one quarter using a system that runs mostly on autopilot.
+
+Happy to share what worked for them if you're interested.
+
+Best,
+{{ sender_name }}

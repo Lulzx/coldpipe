@@ -193,8 +193,8 @@ async def scrape_site(sessions, base_url: str, idx: int, total: int):
 
 
 async def main():
-    csv_file = "webset_dental_implants_all_on_4_full_arch_teeth_in_a_day_phoenix.csv"
-    output_file = "dentist_emails.csv"
+    csv_file = "data/webset_dental_implants_all_on_4_full_arch_teeth_in_a_day_phoenix.csv"
+    output_file = "data/dentist_emails.csv"
 
     urls = []
     with open(csv_file, newline="", encoding="utf-8") as f:

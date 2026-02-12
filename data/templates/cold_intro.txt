@@ -1,0 +1,11 @@
+{{ opener }}
+
+I help dental practices like {{ company }} get more high-value patients through proven digital marketing systems.
+
+Most practices I work with see a 30-40% increase in new patient appointments within 90 days.
+
+Would you be open to a quick 15-minute call this week to see if this could work for {{ company }}?
+
+Best,
+{{ sender_name }}
+{{ sender_title }}

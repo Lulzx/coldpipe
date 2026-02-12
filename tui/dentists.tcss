@@ -1,0 +1,104 @@
+/* Dentists TUI Stylesheet */
+
+Screen {
+    background: $background;
+}
+
+/* Dashboard */
+
+#dashboard-main {
+    height: 1fr;
+    padding: 1;
+}
+
+#left-panel {
+    width: 1fr;
+    margin-right: 1;
+}
+
+#right-panel {
+    width: 1fr;
+}
+
+.section-title {
+    text-style: bold;
+    color: $text;
+    padding: 0 1;
+    margin-bottom: 1;
+    background: $primary-background;
+    height: 3;
+    content-align: center middle;
+}
+
+.spacer {
+    height: 1;
+}
+
+/* Campaigns layout */
+
+#campaigns-layout {
+    height: 1fr;
+    padding: 1;
+}
+
+#campaign-list-panel {
+    width: 2fr;
+    margin-right: 1;
+}
+
+#campaign-detail-panel {
+    width: 3fr;
+}
+
+#campaign-list-panel Button {
+    margin-bottom: 1;
+}
+
+/* Pipeline Kanban */
+
+#kanban-board {
+    height: 1fr;
+    padding: 1;
+}
+
+/* Settings layout */
+
+#settings-layout {
+    height: 1fr;
+    padding: 1;
+}
+
+#mailbox-list-panel {
+    width: 2fr;
+    margin-right: 1;
+}
+
+#mailbox-form-panel {
+    width: 3fr;
+    padding: 1;
+    border: solid $primary-background;
+    background: $surface;
+    overflow-y: auto;
+}
+
+#mailbox-form-panel Label {
+    margin-top: 1;
+    color: $text-muted;
+}
+
+#mailbox-form-panel Input {
+    margin-bottom: 0;
+}
+
+.form-buttons {
+    height: 3;
+    margin-top: 1;
+}
+
+.form-buttons Button {
+    margin-right: 1;
+}
+
+#mailbox-list-panel Button {
+    margin-bottom: 1;
+}

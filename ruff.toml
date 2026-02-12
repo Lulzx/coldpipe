@@ -1,0 +1,12 @@
+line-length = 100
+target-version = "py314"
+
+[lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+ignore = ["E501", "RUF012"]
+
+[lint.isort]
+known-first-party = ["db", "cli", "scrapers", "email_engine", "tui", "config", "shared", "tools"]
+
+[format]
+quote-style = "double"

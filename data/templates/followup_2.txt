@@ -1,0 +1,10 @@
+Hi {{ first_name }},
+
+Quick question — is growing your patient base a priority for {{ company }} right now?
+
+If so, I'd love to show you a case study from a practice similar to yours. If not, no worries at all.
+
+Either way, just let me know and I'll update my notes.
+
+Best,
+{{ sender_name }}
