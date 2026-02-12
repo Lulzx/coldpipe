@@ -29,6 +29,9 @@ class Lead(msgspec.Struct, kw_only=True):
     validated_at: str | None = None
     tags: str = ""
     notes: str = ""
+    email_confidence: float = 0.0
+    email_source: str = ""
+    email_provider: str = ""
     created_at: str = ""
     updated_at: str = ""
 

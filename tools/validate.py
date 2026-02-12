@@ -1,4 +1,5 @@
 """Tool 3: MX + SMTP email verification."""
+
 import argparse
 import asyncio
 import os
@@ -92,27 +93,75 @@ class EmailValidator:
         self.catchall_cache[domain] = is_catchall
         return is_catchall
 
+    def detect_provider(self, mx_hosts: list[str]) -> str:
+        """Detect email provider from MX hostnames."""
+        for host in mx_hosts:
+            h = host.lower()
+            if "google" in h or "gmail" in h:
+                return "gmail"
+            if "outlook" in h or "protection.outlook" in h:
+                return "microsoft365"
+            if "yahoo" in h:
+                return "yahoo"
+        return "generic"
+
     async def validate_email(self, email: str) -> dict:
         """Full validation pipeline for a single email."""
         domain = email.split("@")[1] if "@" in email else ""
         if not domain:
-            return {"validation_status": "error", "mx_host": ""}
+            return {"validation_status": "error", "mx_host": "", "provider": "generic"}
 
         mx_hosts = await self.mx_lookup(domain)
         if not mx_hosts:
-            return {"validation_status": "no-mx", "mx_host": ""}
+            return {"validation_status": "no-mx", "mx_host": "", "provider": "generic"}
 
         mx_host = mx_hosts[0]
+        provider = self.detect_provider(mx_hosts)
 
         # Check catch-all first (cached per domain)
         is_catchall = await self.check_catchall(domain, mx_host)
 
         if is_catchall:
-            return {"validation_status": "catch-all", "mx_host": mx_host}
+            return {"validation_status": "catch-all", "mx_host": mx_host, "provider": provider}
 
         # SMTP verify the actual email
         result = await self.smtp_verify(email, mx_host)
-        return {"validation_status": result, "mx_host": mx_host}
+        return {"validation_status": result, "mx_host": mx_host, "provider": provider}
+
+    async def validate_candidates(self, candidates: list[str], domain: str) -> list[dict]:
+        """Batch-validate a list of candidate emails for a single domain.
+
+        Returns a list of dicts with keys: email, status, provider, is_catchall.
+        """
+        mx_hosts = await self.mx_lookup(domain)
+        if not mx_hosts:
+            return [
+                {"email": c, "status": "no-mx", "provider": "generic", "is_catchall": False}
+                for c in candidates
+            ]
+
+        mx_host = mx_hosts[0]
+        provider = self.detect_provider(mx_hosts)
+        is_catchall = await self.check_catchall(domain, mx_host)
+
+        if is_catchall:
+            return [
+                {"email": c, "status": "catch-all", "provider": provider, "is_catchall": True}
+                for c in candidates
+            ]
+
+        results = []
+        for email in candidates:
+            status = await self.smtp_verify(email, mx_host)
+            results.append(
+                {
+                    "email": email,
+                    "status": status,
+                    "provider": provider,
+                    "is_catchall": False,
+                }
+            )
+        return results
 
 
 async def validate_all(leads: list[dict], concurrency: int = 50) -> list[dict]:

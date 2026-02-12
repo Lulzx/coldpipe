@@ -31,10 +31,30 @@ def _row_to_struct[T](row: aiosqlite.Row, cls: type[T], keys: list[str]) -> T:
 # ---------------------------------------------------------------------------
 
 _LEAD_COLS = [
-    "id", "email", "first_name", "last_name", "company", "job_title", "website",
-    "phone", "address", "city", "state", "zip", "source", "source_url",
-    "email_status", "enriched_at", "validated_at", "tags", "notes",
-    "created_at", "updated_at",
+    "id",
+    "email",
+    "first_name",
+    "last_name",
+    "company",
+    "job_title",
+    "website",
+    "phone",
+    "address",
+    "city",
+    "state",
+    "zip",
+    "source",
+    "source_url",
+    "email_status",
+    "enriched_at",
+    "validated_at",
+    "tags",
+    "notes",
+    "email_confidence",
+    "email_source",
+    "email_provider",
+    "created_at",
+    "updated_at",
 ]
 
 
@@ -43,33 +63,53 @@ async def upsert_lead(db: aiosqlite.Connection, lead: Lead) -> int:
     await db.execute(
         """INSERT INTO leads (email, first_name, last_name, company, job_title, website,
                               phone, address, city, state, zip, source, source_url,
-                              email_status, enriched_at, validated_at, tags, notes)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                              email_status, enriched_at, validated_at, tags, notes,
+                              email_confidence, email_source, email_provider)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(email) DO UPDATE SET
-               first_name   = CASE WHEN excluded.first_name   != '' THEN excluded.first_name   ELSE leads.first_name   END,
-               last_name    = CASE WHEN excluded.last_name    != '' THEN excluded.last_name    ELSE leads.last_name    END,
-               company      = CASE WHEN excluded.company      != '' THEN excluded.company      ELSE leads.company      END,
-               job_title    = CASE WHEN excluded.job_title NOT IN ('', 'Dentist') THEN excluded.job_title ELSE leads.job_title END,
-               website      = CASE WHEN excluded.website      != '' THEN excluded.website      ELSE leads.website      END,
-               phone        = CASE WHEN excluded.phone        != '' THEN excluded.phone        ELSE leads.phone        END,
-               address      = CASE WHEN excluded.address      != '' THEN excluded.address      ELSE leads.address      END,
-               city         = CASE WHEN excluded.city         != '' THEN excluded.city         ELSE leads.city         END,
-               state        = CASE WHEN excluded.state        != '' THEN excluded.state        ELSE leads.state        END,
-               zip          = CASE WHEN excluded.zip          != '' THEN excluded.zip          ELSE leads.zip          END,
-               source       = CASE WHEN excluded.source       != '' THEN excluded.source       ELSE leads.source       END,
-               source_url   = CASE WHEN excluded.source_url   != '' THEN excluded.source_url   ELSE leads.source_url   END,
-               email_status = CASE WHEN excluded.email_status != 'unknown' THEN excluded.email_status ELSE leads.email_status END,
-               enriched_at  = COALESCE(excluded.enriched_at, leads.enriched_at),
-               validated_at = COALESCE(excluded.validated_at, leads.validated_at),
-               tags         = CASE WHEN excluded.tags         != '' THEN excluded.tags         ELSE leads.tags         END,
-               notes        = CASE WHEN excluded.notes        != '' THEN excluded.notes        ELSE leads.notes        END
+               first_name       = CASE WHEN excluded.first_name   != '' THEN excluded.first_name   ELSE leads.first_name   END,
+               last_name        = CASE WHEN excluded.last_name    != '' THEN excluded.last_name    ELSE leads.last_name    END,
+               company          = CASE WHEN excluded.company      != '' THEN excluded.company      ELSE leads.company      END,
+               job_title        = CASE WHEN excluded.job_title NOT IN ('', 'Dentist') THEN excluded.job_title ELSE leads.job_title END,
+               website          = CASE WHEN excluded.website      != '' THEN excluded.website      ELSE leads.website      END,
+               phone            = CASE WHEN excluded.phone        != '' THEN excluded.phone        ELSE leads.phone        END,
+               address          = CASE WHEN excluded.address      != '' THEN excluded.address      ELSE leads.address      END,
+               city             = CASE WHEN excluded.city         != '' THEN excluded.city         ELSE leads.city         END,
+               state            = CASE WHEN excluded.state        != '' THEN excluded.state        ELSE leads.state        END,
+               zip              = CASE WHEN excluded.zip          != '' THEN excluded.zip          ELSE leads.zip          END,
+               source           = CASE WHEN excluded.source       != '' THEN excluded.source       ELSE leads.source       END,
+               source_url       = CASE WHEN excluded.source_url   != '' THEN excluded.source_url   ELSE leads.source_url   END,
+               email_status     = CASE WHEN excluded.email_status != 'unknown' THEN excluded.email_status ELSE leads.email_status END,
+               enriched_at      = COALESCE(excluded.enriched_at, leads.enriched_at),
+               validated_at     = COALESCE(excluded.validated_at, leads.validated_at),
+               tags             = CASE WHEN excluded.tags         != '' THEN excluded.tags         ELSE leads.tags         END,
+               notes            = CASE WHEN excluded.notes        != '' THEN excluded.notes        ELSE leads.notes        END,
+               email_confidence = CASE WHEN excluded.email_confidence > 0.0 THEN excluded.email_confidence ELSE leads.email_confidence END,
+               email_source     = CASE WHEN excluded.email_source     != '' THEN excluded.email_source     ELSE leads.email_source     END,
+               email_provider   = CASE WHEN excluded.email_provider   != '' THEN excluded.email_provider   ELSE leads.email_provider   END
         """,
         (
-            lead.email, lead.first_name, lead.last_name, lead.company,
-            lead.job_title, lead.website, lead.phone, lead.address,
-            lead.city, lead.state, lead.zip, lead.source, lead.source_url,
-            lead.email_status, lead.enriched_at, lead.validated_at,
-            lead.tags, lead.notes,
+            lead.email,
+            lead.first_name,
+            lead.last_name,
+            lead.company,
+            lead.job_title,
+            lead.website,
+            lead.phone,
+            lead.address,
+            lead.city,
+            lead.state,
+            lead.zip,
+            lead.source,
+            lead.source_url,
+            lead.email_status,
+            lead.enriched_at,
+            lead.validated_at,
+            lead.tags,
+            lead.notes,
+            lead.email_confidence,
+            lead.email_source,
+            lead.email_provider,
         ),
     )
     await db.commit()
@@ -160,9 +200,21 @@ async def delete_lead(db: aiosqlite.Connection, lead_id: int) -> bool:
 # ---------------------------------------------------------------------------
 
 _MAILBOX_COLS = [
-    "id", "email", "smtp_host", "smtp_port", "smtp_user", "smtp_pass",
-    "imap_host", "imap_port", "imap_user", "imap_pass",
-    "daily_limit", "warmup_day", "is_active", "display_name", "created_at",
+    "id",
+    "email",
+    "smtp_host",
+    "smtp_port",
+    "smtp_user",
+    "smtp_pass",
+    "imap_host",
+    "imap_port",
+    "imap_user",
+    "imap_pass",
+    "daily_limit",
+    "warmup_day",
+    "is_active",
+    "display_name",
+    "created_at",
 ]
 
 
@@ -181,9 +233,19 @@ async def upsert_mailbox(db: aiosqlite.Connection, mb: Mailbox) -> int:
                is_active = excluded.is_active, display_name = excluded.display_name
         """,
         (
-            mb.email, mb.smtp_host, mb.smtp_port, mb.smtp_user, mb.smtp_pass,
-            mb.imap_host, mb.imap_port, mb.imap_user, mb.imap_pass,
-            mb.daily_limit, mb.warmup_day, mb.is_active, mb.display_name,
+            mb.email,
+            mb.smtp_host,
+            mb.smtp_port,
+            mb.smtp_user,
+            mb.smtp_pass,
+            mb.imap_host,
+            mb.imap_port,
+            mb.imap_user,
+            mb.imap_pass,
+            mb.daily_limit,
+            mb.warmup_day,
+            mb.is_active,
+            mb.display_name,
         ),
     )
     await db.commit()
@@ -215,8 +277,16 @@ async def get_mailbox_by_id(db: aiosqlite.Connection, mailbox_id: int) -> Mailbo
 # ---------------------------------------------------------------------------
 
 _CAMPAIGN_COLS = [
-    "id", "name", "status", "mailbox_id", "daily_limit", "timezone",
-    "send_window_start", "send_window_end", "created_at", "updated_at",
+    "id",
+    "name",
+    "status",
+    "mailbox_id",
+    "daily_limit",
+    "timezone",
+    "send_window_start",
+    "send_window_end",
+    "created_at",
+    "updated_at",
 ]
 
 
@@ -226,8 +296,13 @@ async def create_campaign(db: aiosqlite.Connection, camp: Campaign) -> int:
                                    send_window_start, send_window_end)
            VALUES (?, ?, ?, ?, ?, ?, ?)""",
         (
-            camp.name, camp.status, camp.mailbox_id, camp.daily_limit,
-            camp.timezone, camp.send_window_start, camp.send_window_end,
+            camp.name,
+            camp.status,
+            camp.mailbox_id,
+            camp.daily_limit,
+            camp.timezone,
+            camp.send_window_start,
+            camp.send_window_end,
         ),
     )
     await db.commit()
@@ -255,9 +330,7 @@ async def get_campaign_by_id(db: aiosqlite.Connection, campaign_id: int) -> Camp
 
 
 async def update_campaign_status(db: aiosqlite.Connection, campaign_id: int, status: str) -> bool:
-    cursor = await db.execute(
-        "UPDATE campaigns SET status = ? WHERE id = ?", (status, campaign_id)
-    )
+    cursor = await db.execute("UPDATE campaigns SET status = ? WHERE id = ?", (status, campaign_id))
     await db.commit()
     return cursor.rowcount > 0
 
@@ -267,8 +340,13 @@ async def update_campaign_status(db: aiosqlite.Connection, campaign_id: int, sta
 # ---------------------------------------------------------------------------
 
 _STEP_COLS = [
-    "id", "campaign_id", "step_number", "template_name", "subject",
-    "delay_days", "is_reply",
+    "id",
+    "campaign_id",
+    "step_number",
+    "template_name",
+    "subject",
+    "delay_days",
+    "is_reply",
 ]
 
 
@@ -278,8 +356,12 @@ async def add_sequence_step(db: aiosqlite.Connection, step: SequenceStep) -> int
                                         subject, delay_days, is_reply)
            VALUES (?, ?, ?, ?, ?, ?)""",
         (
-            step.campaign_id, step.step_number, step.template_name,
-            step.subject, step.delay_days, step.is_reply,
+            step.campaign_id,
+            step.step_number,
+            step.template_name,
+            step.subject,
+            step.delay_days,
+            step.is_reply,
         ),
     )
     await db.commit()
@@ -300,8 +382,14 @@ async def get_sequence_steps(db: aiosqlite.Connection, campaign_id: int) -> list
 # ---------------------------------------------------------------------------
 
 _CL_COLS = [
-    "id", "campaign_id", "lead_id", "current_step", "status",
-    "enrolled_at", "last_sent_at", "next_send_at",
+    "id",
+    "campaign_id",
+    "lead_id",
+    "current_step",
+    "status",
+    "enrolled_at",
+    "last_sent_at",
+    "next_send_at",
 ]
 
 
@@ -365,6 +453,7 @@ async def update_campaign_lead_status(
 # Send queue
 # ---------------------------------------------------------------------------
 
+
 async def get_send_queue(
     db: aiosqlite.Connection,
     campaign_id: int,
@@ -400,9 +489,22 @@ async def get_send_queue(
 # ---------------------------------------------------------------------------
 
 _ES_COLS = [
-    "id", "campaign_lead_id", "campaign_id", "lead_id", "mailbox_id", "step_number",
-    "message_id", "subject", "to_email", "from_email", "body_text",
-    "status", "sent_at", "replied_at", "bounced_at", "bounce_reason",
+    "id",
+    "campaign_lead_id",
+    "campaign_id",
+    "lead_id",
+    "mailbox_id",
+    "step_number",
+    "message_id",
+    "subject",
+    "to_email",
+    "from_email",
+    "body_text",
+    "status",
+    "sent_at",
+    "replied_at",
+    "bounced_at",
+    "bounce_reason",
 ]
 
 
@@ -413,9 +515,17 @@ async def log_send(db: aiosqlite.Connection, es: EmailSent) -> int:
                                      from_email, body_text, status)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
-            es.campaign_lead_id, es.campaign_id, es.lead_id, es.mailbox_id,
-            es.step_number, es.message_id, es.subject, es.to_email,
-            es.from_email, es.body_text, es.status,
+            es.campaign_lead_id,
+            es.campaign_id,
+            es.lead_id,
+            es.mailbox_id,
+            es.step_number,
+            es.message_id,
+            es.subject,
+            es.to_email,
+            es.from_email,
+            es.body_text,
+            es.status,
         ),
     )
     await db.commit()
@@ -432,9 +542,7 @@ async def update_email_status(db: aiosqlite.Connection, email_id: int, status: s
         updates.append("bounced_at = ?")
         params.append(_now())
     params.append(email_id)
-    cursor = await db.execute(
-        f"UPDATE emails_sent SET {', '.join(updates)} WHERE id = ?", params
-    )
+    cursor = await db.execute(f"UPDATE emails_sent SET {', '.join(updates)} WHERE id = ?", params)
     await db.commit()
     return cursor.rowcount > 0
 
@@ -448,9 +556,7 @@ async def get_emails_for_lead(db: aiosqlite.Connection, lead_id: int) -> list[Em
 
 
 async def get_email_by_message_id(db: aiosqlite.Connection, message_id: str) -> EmailSent | None:
-    cursor = await db.execute(
-        "SELECT * FROM emails_sent WHERE message_id = ?", (message_id,)
-    )
+    cursor = await db.execute("SELECT * FROM emails_sent WHERE message_id = ?", (message_id,))
     row = await cursor.fetchone()
     if row is None:
         return None
@@ -460,6 +566,7 @@ async def get_email_by_message_id(db: aiosqlite.Connection, message_id: str) -> 
 # ---------------------------------------------------------------------------
 # Daily send limit
 # ---------------------------------------------------------------------------
+
 
 async def check_daily_limit(db: aiosqlite.Connection, mailbox_id: int) -> tuple[int, int]:
     """Returns (sent_today, daily_limit)."""
@@ -471,9 +578,7 @@ async def check_daily_limit(db: aiosqlite.Connection, mailbox_id: int) -> tuple[
     row = await cursor.fetchone()
     sent = row[0] if row else 0
 
-    cursor2 = await db.execute(
-        "SELECT daily_limit FROM mailboxes WHERE id = ?", (mailbox_id,)
-    )
+    cursor2 = await db.execute("SELECT daily_limit FROM mailboxes WHERE id = ?", (mailbox_id,))
     row2 = await cursor2.fetchone()
     limit = row2[0] if row2 else 30
     return sent, limit
@@ -501,8 +606,16 @@ async def increment_daily_send(db: aiosqlite.Connection, mailbox_id: int) -> int
 # ---------------------------------------------------------------------------
 
 _DEAL_COLS = [
-    "id", "lead_id", "campaign_id", "stage", "value",
-    "close_date", "loss_reason", "notes", "created_at", "updated_at",
+    "id",
+    "lead_id",
+    "campaign_id",
+    "stage",
+    "value",
+    "close_date",
+    "loss_reason",
+    "notes",
+    "created_at",
+    "updated_at",
 ]
 
 
@@ -519,8 +632,13 @@ async def upsert_deal(db: aiosqlite.Connection, deal: Deal) -> int:
         """INSERT INTO deals (lead_id, campaign_id, stage, value, close_date, loss_reason, notes)
            VALUES (?, ?, ?, ?, ?, ?, ?)""",
         (
-            deal.lead_id, deal.campaign_id, deal.stage, deal.value,
-            deal.close_date, deal.loss_reason, deal.notes,
+            deal.lead_id,
+            deal.campaign_id,
+            deal.stage,
+            deal.value,
+            deal.close_date,
+            deal.loss_reason,
+            deal.notes,
         ),
     )
     await db.commit()
@@ -568,6 +686,7 @@ async def log_tracking_event(db: aiosqlite.Connection, evt: TrackingEvent) -> in
 # Stats / reporting
 # ---------------------------------------------------------------------------
 
+
 async def get_pipeline_stats(db: aiosqlite.Connection) -> dict:
     """Get deal pipeline counts by stage."""
     cursor = await db.execute(
@@ -595,9 +714,7 @@ async def get_daily_stats(db: aiosqlite.Connection, days: int = 30) -> list[dict
 async def get_lead_stats(db: aiosqlite.Connection) -> dict:
     """Get lead counts grouped by email_status and source."""
     result: dict = {}
-    cursor = await db.execute(
-        "SELECT email_status, COUNT(*) FROM leads GROUP BY email_status"
-    )
+    cursor = await db.execute("SELECT email_status, COUNT(*) FROM leads GROUP BY email_status")
     result["by_status"] = {row[0]: row[1] for row in await cursor.fetchall()}
 
     cursor = await db.execute(
@@ -628,18 +745,14 @@ async def tag_leads(db: aiosqlite.Connection, lead_ids: list[int], tag: str) -> 
         tags_list = [t.strip() for t in existing.split(",") if t.strip()]
         if tag not in tags_list:
             tags_list.append(tag)
-            await db.execute(
-                "UPDATE leads SET tags = ? WHERE id = ?", (",".join(tags_list), lid)
-            )
+            await db.execute("UPDATE leads SET tags = ? WHERE id = ?", (",".join(tags_list), lid))
             count += 1
     await db.commit()
     return count
 
 
 async def deactivate_mailbox(db: aiosqlite.Connection, mailbox_id: int) -> bool:
-    cursor = await db.execute(
-        "UPDATE mailboxes SET is_active = 0 WHERE id = ?", (mailbox_id,)
-    )
+    cursor = await db.execute("UPDATE mailboxes SET is_active = 0 WHERE id = ?", (mailbox_id,))
     await db.commit()
     return cursor.rowcount > 0
 

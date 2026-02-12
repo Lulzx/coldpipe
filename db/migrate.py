@@ -12,9 +12,7 @@ SCHEMA_PATH = Path(__file__).parent / "schema.sql"
 async def get_version(db: aiosqlite.Connection) -> int:
     """Get the current schema version. Returns 0 if table doesn't exist."""
     try:
-        cursor = await db.execute(
-            "SELECT MAX(version) FROM schema_version"
-        )
+        cursor = await db.execute("SELECT MAX(version) FROM schema_version")
         row = await cursor.fetchone()
         return row[0] if row and row[0] is not None else 0
     except aiosqlite.OperationalError:
@@ -31,7 +29,11 @@ async def init_schema(db: aiosqlite.Connection) -> int:
 # Migrations are keyed by target version number.
 # Each migration receives the db connection and upgrades from version N-1 to N.
 MIGRATIONS: dict[int, str] = {
-    # Example: 2: "ALTER TABLE leads ADD COLUMN linkedin TEXT NOT NULL DEFAULT '';",
+    2: """
+        ALTER TABLE leads ADD COLUMN email_confidence REAL NOT NULL DEFAULT 0.0;
+        ALTER TABLE leads ADD COLUMN email_source TEXT NOT NULL DEFAULT '';
+        ALTER TABLE leads ADD COLUMN email_provider TEXT NOT NULL DEFAULT '';
+    """,
 }
 
 
@@ -45,9 +47,7 @@ async def migrate(db: aiosqlite.Connection) -> int:
     target_versions = sorted(v for v in MIGRATIONS if v > current)
     for version in target_versions:
         await db.executescript(MIGRATIONS[version])
-        await db.execute(
-            "INSERT INTO schema_version (version) VALUES (?)", (version,)
-        )
+        await db.execute("INSERT INTO schema_version (version) VALUES (?)", (version,))
         await db.commit()
         current = version
 

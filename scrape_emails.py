@@ -14,7 +14,10 @@ import sys
 import time
 
 from shared.http import create_sessions
+from shared.patterns import generate_candidates
+from shared.scoring import EmailCandidate, pick_best
 from shared.scraping import scrape_site_for_emails
+from tools.validate import EmailValidator
 
 sys.stdout.reconfigure(line_buffering=True)
 
@@ -25,7 +28,14 @@ def log(msg: str):
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
 
 
-async def find_email_for(sessions, company: str, website: str, stats: dict) -> str:
+async def find_email_for(
+    sessions,
+    company: str,
+    website: str,
+    stats: dict,
+    first_name: str = "",
+    last_name: str = "",
+) -> str:
     if not website:
         stats["skip"] += 1
         return ""
@@ -41,6 +51,35 @@ async def find_email_for(sessions, company: str, website: str, stats: dict) -> s
             stats["found"] += 1
             log(f"  FOUND[{stats['found']:>3}] {company}: {r[:70]}")
             return r
+
+        # Pattern fallback: generate candidates from name + domain
+        if first_name and last_name:
+            from urllib.parse import urlparse
+
+            domain = (urlparse(website).hostname or "").replace("www.", "")
+            if domain:
+                candidates = generate_candidates(first_name, last_name, domain)
+                if candidates:
+                    validator = EmailValidator(concurrency=10)
+                    results = await validator.validate_candidates(candidates, domain)
+                    scored = [
+                        EmailCandidate(
+                            email=r["email"],
+                            source="pattern",
+                            smtp_status=r["status"],
+                            is_catchall=r["is_catchall"],
+                            provider=r["provider"],
+                            matches_domain=True,
+                        )
+                        for r in results
+                    ]
+                    best = pick_best(scored)
+                    if best:
+                        stats["found"] += 1
+                        log(
+                            f"  FOUND[{stats['found']:>3}] {company}: {best[0].email} (pattern, score={best[1]:.1f})"
+                        )
+                        return best[0].email
 
         stats["miss"] += 1
         log(f"  MISS {company}")
@@ -66,8 +105,24 @@ async def main():
         all_rows = list(reader)
 
     # Auto-detect column names
-    url_col = next((c for c in ("URL", "url", "website", "Website", "Website (Result)") if c in fieldnames), None)
-    name_col = next((c for c in ("Title", "company", "Company", "Company Name (Result)", "name") if c in fieldnames), None)
+    url_col = next(
+        (c for c in ("URL", "url", "website", "Website", "Website (Result)") if c in fieldnames),
+        None,
+    )
+    name_col = next(
+        (
+            c
+            for c in ("Title", "company", "Company", "Company Name (Result)", "name")
+            if c in fieldnames
+        ),
+        None,
+    )
+    first_name_col = next(
+        (c for c in ("first_name", "First Name", "firstName") if c in fieldnames), None
+    )
+    last_name_col = next(
+        (c for c in ("last_name", "Last Name", "lastName") if c in fieldnames), None
+    )
 
     if not url_col:
         print(f"ERROR: No URL/website column found in {fieldnames}", file=sys.stderr)
@@ -100,6 +155,7 @@ async def main():
     sem = asyncio.Semaphore(concurrency)
 
     try:
+
         async def bounded(idx):
             row = all_rows[idx]
             async with sem:
@@ -108,6 +164,8 @@ async def main():
                     row.get(name_col, "?") if name_col else "?",
                     row.get(url_col, ""),
                     stats,
+                    first_name=row.get(first_name_col, "") if first_name_col else "",
+                    last_name=row.get(last_name_col, "") if last_name_col else "",
                 )
                 return idx, email
 

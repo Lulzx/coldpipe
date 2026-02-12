@@ -15,7 +15,10 @@ from db.models import Lead
 from db.queries import get_leads, upsert_lead
 from shared.email_utils import extract_emails, is_junk
 from shared.http import create_sessions
+from shared.patterns import generate_candidates
+from shared.scoring import EmailCandidate, pick_best
 from shared.scraping import scrape_site_for_emails
+from tools.validate import EmailValidator
 
 _ENRICHMENT_PROMPT = """Extract contact information for this dental practice from the page content.
 Return a JSON object with these fields (use empty string if not found):
@@ -52,7 +55,7 @@ def _parse_name(name: str) -> tuple[str, str]:
     cleaned = name.strip()
     for prefix in ("Dr.", "Dr", "DDS", "DMD"):
         if cleaned.startswith(prefix):
-            cleaned = cleaned[len(prefix):].strip(", ")
+            cleaned = cleaned[len(prefix) :].strip(", ")
     parts = cleaned.split(None, 1)
     if len(parts) == 2:
         return parts[0], parts[1]
@@ -82,10 +85,7 @@ class WebsiteEnricher:
             offset += 100
 
         # Filter to leads with website but missing key data
-        targets = [
-            l for l in all_leads
-            if l.website and (not l.email or not l.phone)
-        ][:limit]
+        targets = [l for l in all_leads if l.website and (not l.email or not l.phone)][:limit]
 
         if not targets:
             return []
@@ -120,16 +120,44 @@ class WebsiteEnricher:
                     # Fallback: use shared scraping module
                     data = await self._fallback_scrape(url)
 
+                if not data and lead.first_name and lead.last_name and lead.website:
+                    # Pattern fallback: generate candidates from name + domain
+                    domain = urlparse(url).hostname or ""
+                    domain = domain.replace("www.", "")
+                    if domain:
+                        candidates = generate_candidates(lead.first_name, lead.last_name, domain)
+                        if candidates:
+                            validator = EmailValidator(concurrency=10)
+                            results = await validator.validate_candidates(candidates, domain)
+                            scored = [
+                                EmailCandidate(
+                                    email=r["email"],
+                                    source="pattern",
+                                    smtp_status=r["status"],
+                                    is_catchall=r["is_catchall"],
+                                    provider=r["provider"],
+                                    matches_domain=True,
+                                )
+                                for r in results
+                            ]
+                            best = pick_best(scored)
+                            if best:
+                                data = {"emails": [best[0].email]}
+                                data["_email_confidence"] = best[1]
+                                data["_email_source"] = "pattern"
+                                data["_email_provider"] = best[0].provider
                 if not data:
                     continue
 
                 # Apply enrichment data to lead
                 emails = [e for e in data.get("emails", []) if not is_junk(e)]
                 if emails and not lead.email:
-                    lead = Lead(**{
-                        **{k: getattr(lead, k) for k in lead.__struct_fields__},
-                        "email": emails[0],
-                    })
+                    lead = Lead(
+                        **{
+                            **{k: getattr(lead, k) for k in lead.__struct_fields__},
+                            "email": emails[0],
+                        }
+                    )
 
                 updates: dict = {}
                 if data.get("phone") and not lead.phone:
@@ -161,15 +189,27 @@ class WebsiteEnricher:
                 if notes_parts and not lead.notes:
                     updates["notes"] = " | ".join(notes_parts)
 
-                updates["enriched_at"] = __import__("datetime").datetime.now(
-                    __import__("datetime").UTC
-                ).strftime("%Y-%m-%dT%H:%M:%SZ")
+                # Apply pattern-fallback scoring metadata if present
+                if data.get("_email_confidence"):
+                    updates["email_confidence"] = data["_email_confidence"]
+                if data.get("_email_source"):
+                    updates["email_source"] = data["_email_source"]
+                if data.get("_email_provider"):
+                    updates["email_provider"] = data["_email_provider"]
+
+                updates["enriched_at"] = (
+                    __import__("datetime")
+                    .datetime.now(__import__("datetime").UTC)
+                    .strftime("%Y-%m-%dT%H:%M:%SZ")
+                )
 
                 if updates:
-                    updated = Lead(**{
-                        **{k: getattr(lead, k) for k in lead.__struct_fields__},
-                        **updates,
-                    })
+                    updated = Lead(
+                        **{
+                            **{k: getattr(lead, k) for k in lead.__struct_fields__},
+                            **updates,
+                        }
+                    )
                     await upsert_lead(db, updated)
                     enriched.append(updated)
 
@@ -190,8 +230,10 @@ class WebsiteEnricher:
             if isinstance(data, list):
                 # Merge multiple page extractions
                 merged: dict = {
-                    "emails": [], "dentist_names": [],
-                    "specialties": [], "services": [],
+                    "emails": [],
+                    "dentist_names": [],
+                    "specialties": [],
+                    "services": [],
                 }
                 for item in data:
                     if not isinstance(item, dict):
@@ -212,9 +254,7 @@ class WebsiteEnricher:
             sessions = create_sessions()
             ssl_session, nossl_session = sessions
             try:
-                emails = await scrape_site_for_emails(
-                    [ssl_session, nossl_session], url
-                )
+                emails = await scrape_site_for_emails([ssl_session, nossl_session], url)
                 if emails:
                     return {"emails": list(emails)}
                 return None
