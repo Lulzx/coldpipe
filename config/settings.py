@@ -38,7 +38,7 @@ class SendSettings(msgspec.Struct, kw_only=True, frozen=True):
 
 
 class LlmSettings(msgspec.Struct, kw_only=True, frozen=True):
-    model: str = "claude-sonnet-4-20250514"
+    model: str = "claude-haiku-4-5"
     max_concurrent: int = 5
     max_opener_words: int = 30
 

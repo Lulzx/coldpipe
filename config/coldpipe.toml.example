@@ -27,7 +27,7 @@ min_delay_seconds = 30
 max_delay_seconds = 90
 
 [llm]
-model = "claude-sonnet-4-20250514"
+model = "claude-haiku-4-5"
 max_concurrent = 5
 max_opener_words = 30
 
