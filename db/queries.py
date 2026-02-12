@@ -850,7 +850,7 @@ def get_warmup_limit(warmup_day: int) -> int:
         return 20
     if warmup_day <= 21:
         return 30
-    return 45
+    return min(40 + (warmup_day - 22), 50)
 
 
 async def get_deal_stats(db: aiosqlite.Connection) -> dict:

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import contextlib
 import email
 import logging
 import re
 from email.message import Message
 
+import aioimaplib
 import aiosqlite
 
 from db import queries
@@ -222,8 +224,74 @@ async def _handle_soft_bounce(
 
 
 async def check_bounces(db: aiosqlite.Connection, mb: object) -> int:
-    """Thin wrapper for daemon: check a mailbox for bounce DSNs.
+    """Poll IMAP for bounce DSNs and apply bounce processing.
 
-    TODO: implement full IMAP fetch + parse_dsn + process_bounce pipeline.
+    Returns the number of bounce messages processed.
     """
-    return 0
+    host = getattr(mb, "imap_host", "")
+    port = int(getattr(mb, "imap_port", 993))
+    user = getattr(mb, "imap_user", "")
+    password = getattr(mb, "imap_pass", "")
+
+    if not host or not user or not password:
+        return 0
+
+    client: aioimaplib.IMAP4_SSL | None = None
+    processed = 0
+
+    try:
+        client = aioimaplib.IMAP4_SSL(host=host, port=port)
+        await client.wait_hello_from_server()
+        await client.login(user, password)
+        await client.select("INBOX")
+
+        result, data = await client.uid("search", "UNSEEN")
+        if result != "OK":
+            log.warning("Bounce IMAP search failed for %s: %s", user, result)
+            return 0
+
+        uids: list[str] = []
+        for item in data:
+            if isinstance(item, bytes):
+                uids.extend(item.decode(errors="ignore").split())
+            elif isinstance(item, str):
+                uids.extend(item.split())
+
+        for uid in uids:
+            fetch_result, fetch_data = await client.uid("fetch", uid, "(RFC822)")
+            if fetch_result != "OK" or not fetch_data:
+                continue
+
+            raw: bytes | None = None
+            for item in fetch_data:
+                if isinstance(item, tuple) and len(item) >= 2:
+                    body = item[1]
+                    if isinstance(body, bytes):
+                        raw = body
+                        break
+                    if isinstance(body, str):
+                        raw = body.encode()
+                        break
+                elif isinstance(item, bytes):
+                    raw = item
+                    break
+
+            if raw is None:
+                continue
+
+            dsn = parse_dsn(raw)
+            if dsn is None:
+                continue
+
+            await process_bounce(db, dsn)
+            processed += 1
+
+            # Best effort: prevent repeated processing.
+            with contextlib.suppress(Exception):
+                await client.uid("store", uid, "+FLAGS", "(\\Seen)")
+
+        return processed
+    finally:
+        if client is not None:
+            with contextlib.suppress(Exception):
+                await client.logout()

@@ -114,6 +114,8 @@ def start():
                                         body=body,
                                         message_id=message_id,
                                         delay_days=item["delay_days"],
+                                        to_email=item["email"],
+                                        from_email=mb.email,
                                     )
                                 except Exception:
                                     log.debug("send_job: per-email error", exc_info=True)

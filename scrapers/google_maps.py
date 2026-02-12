@@ -93,7 +93,7 @@ class GoogleMapsScraper:
 
             try:
                 items = json.loads(result.extracted_content)
-            except json.JSONDecodeError, TypeError:
+            except (json.JSONDecodeError, TypeError):
                 return leads
 
             for item in items[:max_results]:

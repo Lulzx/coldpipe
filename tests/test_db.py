@@ -609,4 +609,5 @@ async def test_warmup_limit():
     assert queries.get_warmup_limit(10) == 20
     assert queries.get_warmup_limit(15) == 30
     assert queries.get_warmup_limit(21) == 30
-    assert queries.get_warmup_limit(30) == 45
+    assert queries.get_warmup_limit(30) == 48
+    assert queries.get_warmup_limit(50) == 50

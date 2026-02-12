@@ -137,7 +137,7 @@ class DirectoryScraper:
 
                 try:
                     items = json.loads(result.extracted_content)
-                except json.JSONDecodeError, TypeError:
+                except (json.JSONDecodeError, TypeError):
                     continue
 
                 for item in items[:max_results]:

@@ -39,7 +39,11 @@ def run(
             console.print(f"Enriching {len(to_enrich)} leads...")
             enricher = WebsiteEnricher()
 
-            results = await enricher.scrape(db, limit=len(to_enrich))
+            results = await enricher.scrape(
+                db,
+                limit=len(to_enrich),
+                lead_ids=[lead.id for lead in to_enrich],
+            )
             enriched = len(results)
 
             console.print(f"[green]Enriched {enriched}/{len(to_enrich)} leads[/green]")

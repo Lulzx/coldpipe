@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 
 from db import queries
@@ -181,10 +183,68 @@ async def test_advance_sequence(db):
     cls = await queries.get_campaign_leads(db, cid)
     assert cls[0].current_step == 1
     assert cls[0].last_sent_at is not None
+    assert cls[0].status == "completed"
+    assert cls[0].next_send_at is None
 
     # Check daily send incremented
     sent, _ = await queries.check_daily_limit(db, mid)
     assert sent == 1
+
+
+@pytest.mark.asyncio
+async def test_advance_sequence_schedules_next_step(db):
+    lid = await queries.upsert_lead(db, Lead(email="doc@test.com"))
+    mid = await queries.upsert_mailbox(
+        db,
+        Mailbox(
+            email="out@test.com",
+            smtp_host="h",
+            smtp_user="u",
+            smtp_pass="p",
+        ),
+    )
+    cid = await queries.create_campaign(db, Campaign(name="Camp"))
+    await queries.add_sequence_step(
+        db,
+        SequenceStep(
+            campaign_id=cid,
+            step_number=0,
+            template_name="intro",
+            subject="Hi",
+            delay_days=0,
+        ),
+    )
+    await queries.add_sequence_step(
+        db,
+        SequenceStep(
+            campaign_id=cid,
+            step_number=1,
+            template_name="followup",
+            subject="Follow up",
+            delay_days=3,
+        ),
+    )
+    clid = await queries.enroll_lead(db, cid, lid)
+
+    await advance_sequence(
+        db,
+        campaign_lead_id=clid,
+        campaign_id=cid,
+        lead_id=lid,
+        mailbox_id=mid,
+        step_number=0,
+        subject="Hello",
+        body="Body text",
+        message_id="msg-adv-2",
+        delay_days=0,
+    )
+
+    cls = await queries.get_campaign_leads(db, cid)
+    assert cls[0].status == "active"
+    assert cls[0].next_send_at is not None
+
+    scheduled = datetime.strptime(cls[0].next_send_at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+    assert scheduled > datetime.now(UTC)
 
 
 @pytest.mark.asyncio

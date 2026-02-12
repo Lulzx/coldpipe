@@ -18,24 +18,8 @@ DEFAULT_QUEUE_SIZE = 50
 
 
 def warmup_daily_limit(warmup_day: int) -> int:
-    """Return the max daily sends for the given warmup day.
-
-    Day 1-3:  5
-    Day 4-7:  10
-    Day 8-14: 20
-    Day 15-21: 30
-    Day 22+:  40-50 (capped at 50)
-    """
-    if warmup_day <= 3:
-        return 5
-    if warmup_day <= 7:
-        return 10
-    if warmup_day <= 14:
-        return 20
-    if warmup_day <= 21:
-        return 30
-    # Day 22+: linearly ramp from 40 to 50 over days 22-30, then cap at 50
-    return min(40 + (warmup_day - 22), 50)
+    """Return warmup limit using the shared DB/query logic."""
+    return queries.get_warmup_limit(warmup_day)
 
 
 def _in_send_window(send_settings: SendSettings) -> bool:

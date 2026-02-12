@@ -26,6 +26,8 @@ def preview(
 
     async def _preview():
         async with get_db() as db:
+            template_name = ""
+            subject_template = ""
             if lead_id:
                 lead = await queries.get_lead_by_id(db, lead_id)
                 if not lead:
@@ -36,6 +38,8 @@ def preview(
                     console.print(f"[red]No sequence steps for campaign {campaign_id}[/red]")
                     return
                 step = steps[0]
+                template_name = step.template_name
+                subject_template = step.subject
                 lead_dict = {
                     "first_name": lead.first_name,
                     "last_name": lead.last_name,
@@ -53,9 +57,8 @@ def preview(
                     return
                 item = queue[0]
                 lead_dict = item
-                step = type(
-                    "Step", (), {"template_name": item["template_name"], "subject": item["subject"]}
-                )()
+                template_name = item["template_name"]
+                subject_template = item["subject"]
 
             # Generate opener
             from mailer.personalize import personalize_opener
@@ -71,12 +74,12 @@ def preview(
                 "sender_name": "Your Name",
                 "sender_title": "",
             }
-            body = render_template(step.template_name, context)
+            body = render_template(template_name, context)
 
             # Render subject
             from jinja2 import Template
 
-            subject = Template(step.subject).render(**context)
+            subject = Template(subject_template).render(**context)
 
             console.print(f"\n[bold]To:[/bold] {lead_dict.get('email', 'N/A')}")
             console.print(f"[bold]Subject:[/bold] {subject}")
@@ -191,6 +194,8 @@ def run(
                             body=body,
                             message_id=message_id,
                             delay_days=item["delay_days"],
+                            to_email=item["email"],
+                            from_email=mailbox.email,
                         )
                         sent_count += 1
                         console.print(f"  Sent to {item['email']} (step {item['current_step']})")

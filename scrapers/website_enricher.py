@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 from datetime import UTC, datetime
+from typing import Any
 from urllib.parse import urlparse
 
 import aiosqlite
@@ -73,6 +74,7 @@ class WebsiteEnricher:
         db: aiosqlite.Connection,
         *,
         limit: int = 50,
+        lead_ids: list[int] | None = None,
     ) -> list[Lead]:
         """Enrich leads that have a website but are missing email/phone/address."""
         # Fetch leads needing enrichment
@@ -85,10 +87,15 @@ class WebsiteEnricher:
             all_leads.extend(batch)
             offset += 100
 
-        # Filter to leads with website but missing key data
-        targets = [
-            lead for lead in all_leads if lead.website and (not lead.email or not lead.phone)
-        ][:limit]
+        if lead_ids:
+            wanted = set(lead_ids)
+            # Respect explicit caller selection when provided.
+            targets = [lead for lead in all_leads if lead.id in wanted][:limit]
+        else:
+            # Default behavior: leads with websites missing key contact data.
+            targets = [
+                lead for lead in all_leads if lead.website and (not lead.email or not lead.phone)
+            ][:limit]
 
         if not targets:
             return []
@@ -117,7 +124,7 @@ class WebsiteEnricher:
                 if not url.startswith("http"):
                     url = f"https://{url}"
 
-                data = await self._crawl_site(crawler, url, run_cfg)
+                data: dict[str, Any] | None = await self._crawl_site(crawler, url, run_cfg)
 
                 if not data:
                     # Fallback: use shared scraping module
@@ -159,7 +166,7 @@ class WebsiteEnricher:
                     fields["email"] = emails[0]
                     lead = Lead(**fields)
 
-                updates: dict = {}
+                updates: dict[str, Any] = {}
                 if data.get("phone") and not lead.phone:
                     updates["phone"] = data["phone"]
                 if data.get("address") and not lead.address:
@@ -213,7 +220,7 @@ class WebsiteEnricher:
         crawler: AsyncWebCrawler,
         url: str,
         run_cfg: CrawlerRunConfig,
-    ) -> dict | None:
+    ) -> dict[str, Any] | None:
         """Run Crawl4AI deep crawl + LLM extraction on a site."""
         try:
             results = await crawler.arun(url=url, config=run_cfg)  # type: ignore[arg-type]
@@ -222,7 +229,7 @@ class WebsiteEnricher:
             data = json.loads(results.extracted_content)  # type: ignore[union-attr]
             if isinstance(data, list):
                 # Merge multiple page extractions
-                merged: dict = {
+                merged: dict[str, Any] = {
                     "emails": [],
                     "contact_names": [],
                     "specialties": [],
@@ -241,7 +248,7 @@ class WebsiteEnricher:
         except Exception:
             return None
 
-    async def _fallback_scrape(self, url: str) -> dict | None:
+    async def _fallback_scrape(self, url: str) -> dict[str, Any] | None:
         """Use shared/scraping.py as fallback for email extraction."""
         try:
             sessions = create_sessions()
