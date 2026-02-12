@@ -2,20 +2,15 @@
 
 from __future__ import annotations
 
-import asyncio
-
 import typer
 from rich.console import Console
 
+from cli import _run
 from config import setup_logging
 from db import get_db
 
 console = Console()
 scrape_app = typer.Typer(help="Scrape leads from various sources.")
-
-
-def _run(coro):
-    return asyncio.run(coro)
 
 
 @scrape_app.command("google-maps")

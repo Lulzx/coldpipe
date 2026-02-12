@@ -1,4 +1,4 @@
-"""Exa.ai API scraper for finding dentist websites."""
+"""Exa.ai API scraper for finding business websites."""
 
 from __future__ import annotations
 
@@ -13,13 +13,13 @@ from db.queries import upsert_lead
 
 
 class ExaScraper:
-    """Search for dentist practices using the Exa.ai API."""
+    """Search for businesses using the Exa.ai API."""
 
     async def scrape(
         self,
         db: aiosqlite.Connection,
         *,
-        query: str = "dentist office",
+        query: str = "local business",
         city: str = "",
         max_results: int = 20,
     ) -> list[Lead]:

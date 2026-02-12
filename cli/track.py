@@ -2,21 +2,16 @@
 
 from __future__ import annotations
 
-import asyncio
-
 import typer
 from rich.console import Console
 from rich.table import Table
 
+from cli import _run
 from config import setup_logging
 from db import get_db, queries
 
 console = Console()
 track_app = typer.Typer(help="Email tracking commands (replies + bounces).")
-
-
-def _run(coro):
-    return asyncio.run(coro)
 
 
 @track_app.command("check-replies")
@@ -31,7 +26,7 @@ def check_replies():
                 console.print("[yellow]No active mailboxes configured[/yellow]")
                 return
 
-            from email_engine.replies import check_replies as _check_replies
+            from mailer.replies import check_replies as _check_replies
 
             total_replies = 0
             for mb in mailboxes:
@@ -62,7 +57,7 @@ def check_bounces():
                 console.print("[yellow]No active mailboxes configured[/yellow]")
                 return
 
-            from email_engine.bounces import check_bounces as _check_bounces
+            from mailer.bounces import check_bounces as _check_bounces
 
             total_bounces = 0
             for mb in mailboxes:

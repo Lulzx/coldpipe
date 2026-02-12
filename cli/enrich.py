@@ -2,20 +2,15 @@
 
 from __future__ import annotations
 
-import asyncio
-
 import typer
 from rich.console import Console
 
+from cli import _run
 from config import setup_logging
 from db import get_db, queries
 
 console = Console()
 enrich_app = typer.Typer(help="Enrich leads with missing data.")
-
-
-def _run(coro):
-    return asyncio.run(coro)
 
 
 @enrich_app.command("run")

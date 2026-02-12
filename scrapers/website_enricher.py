@@ -1,9 +1,10 @@
-"""Website enricher — deep-crawl practice websites to extract contact details."""
+"""Website enricher — deep-crawl websites to extract contact details."""
 
 from __future__ import annotations
 
 import json
 import os
+from datetime import UTC, datetime
 from urllib.parse import urlparse
 
 import aiosqlite
@@ -20,7 +21,7 @@ from shared.scoring import EmailCandidate, pick_best
 from shared.scraping import scrape_site_for_emails
 from tools.validate import EmailValidator
 
-_ENRICHMENT_PROMPT = """Extract contact information for this dental practice from the page content.
+_ENRICHMENT_PROMPT = """Extract contact information for this business from the page content.
 Return a JSON object with these fields (use empty string if not found):
 - emails: array of email addresses found
 - phone: primary phone number
@@ -28,10 +29,10 @@ Return a JSON object with these fields (use empty string if not found):
 - city: city name
 - state: state abbreviation
 - zip: zip code
-- dentist_names: array of dentist names found
-- specialties: array of dental specialties (e.g. "orthodontics", "cosmetic dentistry")
+- contact_names: array of contact/owner names found
+- specialties: array of specialties or focus areas
 - services: array of services offered
-- about: brief description of the practice (max 200 chars)"""
+- about: brief description of the business (max 200 chars)"""
 
 _ENRICHMENT_SCHEMA = {
     "type": "object",
@@ -42,7 +43,7 @@ _ENRICHMENT_SCHEMA = {
         "city": {"type": "string"},
         "state": {"type": "string"},
         "zip": {"type": "string"},
-        "dentist_names": {"type": "array", "items": {"type": "string"}},
+        "contact_names": {"type": "array", "items": {"type": "string"}},
         "specialties": {"type": "array", "items": {"type": "string"}},
         "services": {"type": "array", "items": {"type": "string"}},
         "about": {"type": "string"},
@@ -65,7 +66,7 @@ def _parse_name(name: str) -> tuple[str, str]:
 
 
 class WebsiteEnricher:
-    """Deep-crawl practice websites and enrich lead records with extracted data."""
+    """Deep-crawl websites and enrich lead records with extracted data."""
 
     async def scrape(
         self,
@@ -171,7 +172,7 @@ class WebsiteEnricher:
                     updates["zip"] = data["zip"]
 
                 # Extract dentist names into first/last if missing
-                names = data.get("dentist_names", [])
+                names = data.get("contact_names", [])
                 if names and not lead.first_name:
                     first, last = _parse_name(names[0])
                     updates["first_name"] = first
@@ -196,11 +197,7 @@ class WebsiteEnricher:
                 if data.get("_email_provider"):
                     updates["email_provider"] = data["_email_provider"]
 
-                updates["enriched_at"] = (
-                    __import__("datetime")
-                    .datetime.now(__import__("datetime").UTC)
-                    .strftime("%Y-%m-%dT%H:%M:%SZ")
-                )
+                updates["enriched_at"] = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
                 if updates:
                     fields = {k: getattr(lead, k) for k in lead.__struct_fields__}
@@ -227,14 +224,14 @@ class WebsiteEnricher:
                 # Merge multiple page extractions
                 merged: dict = {
                     "emails": [],
-                    "dentist_names": [],
+                    "contact_names": [],
                     "specialties": [],
                     "services": [],
                 }
                 for item in data:
                     if not isinstance(item, dict):
                         continue
-                    for key in ("emails", "dentist_names", "specialties", "services"):
+                    for key in ("emails", "contact_names", "specialties", "services"):
                         merged[key].extend(item.get(key, []))
                     for key in ("phone", "address", "city", "state", "zip", "about"):
                         if item.get(key) and not merged.get(key):

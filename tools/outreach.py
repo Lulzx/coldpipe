@@ -1,10 +1,6 @@
 """Tool 4: Generate personalized cold email opening lines."""
 
 import argparse
-import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from shared.csv_io import load_leads, save_csv
 

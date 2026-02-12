@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from config.settings import LlmSettings
-from email_engine.personalize import (
+from mailer.personalize import (
     _build_user_prompt,
     _fallback_opener,
     batch_personalize,
@@ -107,7 +107,7 @@ async def test_personalize_opener_with_mock_api():
     mock_client = MagicMock()
     mock_client.messages.create = AsyncMock(return_value=mock_response)
 
-    with patch("email_engine.personalize.anthropic.AsyncAnthropic", return_value=mock_client):
+    with patch("mailer.personalize.anthropic.AsyncAnthropic", return_value=mock_client):
         lead = {"first_name": "Alice", "company": "Smile Dental", "city": "Austin"}
         result = await personalize_opener(lead, api_key="test-key")
 
@@ -121,7 +121,7 @@ async def test_personalize_opener_api_failure_fallback():
     mock_client = MagicMock()
     mock_client.messages.create = AsyncMock(side_effect=RuntimeError("API down"))
 
-    with patch("email_engine.personalize.anthropic.AsyncAnthropic", return_value=mock_client):
+    with patch("mailer.personalize.anthropic.AsyncAnthropic", return_value=mock_client):
         lead = {"first_name": "Alice", "company": "Smile Dental", "city": "Austin"}
         result = await personalize_opener(lead, api_key="test-key")
 
@@ -141,7 +141,7 @@ async def test_personalize_opener_word_limit():
 
     llm = LlmSettings(max_opener_words=10)
 
-    with patch("email_engine.personalize.anthropic.AsyncAnthropic", return_value=mock_client):
+    with patch("mailer.personalize.anthropic.AsyncAnthropic", return_value=mock_client):
         lead = {"first_name": "Alice"}
         result = await personalize_opener(lead, api_key="test-key", llm=llm)
 
@@ -162,7 +162,7 @@ async def test_batch_personalize_with_mock():
     mock_client = MagicMock()
     mock_client.messages.create = AsyncMock(return_value=mock_response)
 
-    with patch("email_engine.personalize.anthropic.AsyncAnthropic", return_value=mock_client):
+    with patch("mailer.personalize.anthropic.AsyncAnthropic", return_value=mock_client):
         leads = [
             {"first_name": "Alice", "company": "Smile"},
             {"first_name": "Bob", "company": "Jones"},
@@ -215,7 +215,7 @@ async def test_batch_personalize_semaphore_limit():
 
     llm = LlmSettings(max_concurrent=2)
 
-    with patch("email_engine.personalize.anthropic.AsyncAnthropic", return_value=mock_client):
+    with patch("mailer.personalize.anthropic.AsyncAnthropic", return_value=mock_client):
         leads = [{"first_name": f"Lead{i}"} for i in range(6)]
         results = await batch_personalize(leads, api_key="test-key", llm=llm)
 

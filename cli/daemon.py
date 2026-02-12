@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import signal
 
 import typer
 from rich.console import Console
 
 from config import setup_logging
+
+log = logging.getLogger(__name__)
 
 console = Console()
 daemon_app = typer.Typer(help="Background daemon for automated sending and tracking.")
@@ -53,10 +56,10 @@ def start():
                     from jinja2 import Template
 
                     from config.settings import SmtpSettings, load_settings
-                    from email_engine.personalize import personalize_opener
-                    from email_engine.sender import EmailSender
-                    from email_engine.sequences import advance_sequence
-                    from email_engine.templates import render_template
+                    from mailer.personalize import personalize_opener
+                    from mailer.sender import EmailSender
+                    from mailer.sequences import advance_sequence
+                    from mailer.templates import render_template
 
                     settings = load_settings()
 
@@ -113,37 +116,37 @@ def start():
                                         delay_days=item["delay_days"],
                                     )
                                 except Exception:
-                                    pass  # Per-email error handling, continue batch
+                                    log.debug("send_job: per-email error", exc_info=True)
             except Exception:
-                pass
+                log.debug("send_job error", exc_info=True)
 
         async def reply_job():
             """Check for new replies across all mailboxes."""
             try:
                 async with get_db() as db:
                     mailboxes = await queries.get_mailboxes(db, active_only=True)
-                    from email_engine.replies import check_replies
+                    from mailer.replies import check_replies
 
                     for mb in mailboxes:
                         if mb.imap_host and mb.imap_user:
                             with contextlib.suppress(Exception):
                                 await check_replies(db, mb)
             except Exception:
-                pass
+                log.debug("reply_job error", exc_info=True)
 
         async def bounce_job():
             """Check for bounced emails."""
             try:
                 async with get_db() as db:
                     mailboxes = await queries.get_mailboxes(db, active_only=True)
-                    from email_engine.bounces import check_bounces
+                    from mailer.bounces import check_bounces
 
                     for mb in mailboxes:
                         if mb.imap_host and mb.imap_user:
                             with contextlib.suppress(Exception):
                                 await check_bounces(db, mb)
             except Exception:
-                pass
+                log.debug("bounce_job error", exc_info=True)
 
         async def warmup_job():
             """Advance warmup day counter for all active mailboxes."""
@@ -154,7 +157,7 @@ def start():
                     )
                     await db.commit()
             except Exception:
-                pass
+                log.debug("warmup_job error", exc_info=True)
 
         async with AsyncScheduler() as scheduler:
             # Send emails every 15 min during business hours

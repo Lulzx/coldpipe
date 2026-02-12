@@ -1,4 +1,4 @@
-"""Google Maps scraper using Crawl4AI with LLM extraction."""
+"""Google Maps scraper using Crawl4AI with LLM extraction for local businesses."""
 
 from __future__ import annotations
 
@@ -12,9 +12,9 @@ from crawl4ai.extraction_strategy import LLMExtractionStrategy
 from db.models import Lead
 from db.queries import upsert_lead
 
-_SYSTEM_PROMPT = """Extract dentist/dental practice information from Google Maps search results.
+_SYSTEM_PROMPT = """Extract business information from Google Maps search results.
 For each result, extract:
-- name: practice or dentist name
+- name: business name
 - address: full street address
 - city: city name
 - state: state abbreviation
@@ -23,7 +23,7 @@ For each result, extract:
 - website: website URL
 - rating: star rating (as string)
 
-Return a JSON array of objects with these keys. Only include results that are dental practices."""
+Return a JSON array of objects with these keys."""
 
 _SCHEMA = {
     "type": "array",
@@ -44,7 +44,7 @@ _SCHEMA = {
 
 
 class GoogleMapsScraper:
-    """Scrape dentist listings from Google Maps using Crawl4AI + LLM extraction."""
+    """Scrape business listings from Google Maps using Crawl4AI + LLM extraction."""
 
     async def scrape(
         self,
@@ -53,7 +53,7 @@ class GoogleMapsScraper:
         city: str = "New York",
         max_results: int = 20,
     ) -> list[Lead]:
-        query = f"dentists in {city}"
+        query = f"businesses in {city}"
         url = f"https://www.google.com/maps/search/{query.replace(' ', '+')}"
 
         extraction = LLMExtractionStrategy(

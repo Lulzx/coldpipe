@@ -2,22 +2,17 @@
 
 from __future__ import annotations
 
-import asyncio
-
 import typer
 from rich.console import Console
 from rich.table import Table
 
+from cli import _run
 from config import setup_logging
 from config.settings import load_settings
 from db import get_db, queries
 
 console = Console()
 send_app = typer.Typer(help="Email sending commands.")
-
-
-def _run(coro):
-    return asyncio.run(coro)
 
 
 @send_app.command("preview")
@@ -63,12 +58,12 @@ def preview(
                 )()
 
             # Generate opener
-            from email_engine.personalize import personalize_opener
+            from mailer.personalize import personalize_opener
 
             opener = await personalize_opener(lead_dict, api_key=settings.anthropic_api_key)
 
             # Render template
-            from email_engine.templates import render_template
+            from mailer.templates import render_template
 
             context = {
                 **lead_dict,
@@ -145,10 +140,10 @@ def run(
             from jinja2 import Template
 
             from config.settings import SmtpSettings
-            from email_engine.personalize import personalize_opener
-            from email_engine.sender import EmailSender
-            from email_engine.sequences import advance_sequence
-            from email_engine.templates import render_template
+            from mailer.personalize import personalize_opener
+            from mailer.sender import EmailSender
+            from mailer.sequences import advance_sequence
+            from mailer.templates import render_template
 
             smtp = SmtpSettings(
                 host=mailbox.smtp_host,

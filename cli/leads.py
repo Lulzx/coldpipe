@@ -2,22 +2,18 @@
 
 from __future__ import annotations
 
-import asyncio
 import csv
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
+from cli import _run
 from config import setup_logging
 from db import get_db, queries
 
 console = Console()
 leads_app = typer.Typer(help="Lead management commands.")
-
-
-def _run(coro):
-    return asyncio.run(coro)
 
 
 @leads_app.command("list")

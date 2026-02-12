@@ -2,22 +2,17 @@
 
 from __future__ import annotations
 
-import asyncio
-
 import typer
 from rich.console import Console
 from rich.table import Table
 
+from cli import _run
 from config import setup_logging
 from db import get_db, queries
 from db.models import Mailbox
 
 console = Console()
 mailbox_app = typer.Typer(help="Mailbox management commands.")
-
-
-def _run(coro):
-    return asyncio.run(coro)
 
 
 @mailbox_app.command("add")
@@ -104,7 +99,7 @@ def test(
                 return
 
             from config.settings import SmtpSettings
-            from email_engine.sender import EmailSender
+            from mailer.sender import EmailSender
 
             smtp = SmtpSettings(
                 host=mb.smtp_host,

@@ -1,4 +1,4 @@
--- Dentists DB Schema v1
+-- Coldpipe DB Schema v1
 PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
 
@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS leads (
     first_name      TEXT    NOT NULL DEFAULT '',
     last_name       TEXT    NOT NULL DEFAULT '',
     company         TEXT    NOT NULL DEFAULT '',
-    job_title       TEXT    NOT NULL DEFAULT 'Dentist',
+    job_title       TEXT    NOT NULL DEFAULT '',
     website         TEXT    NOT NULL DEFAULT '',
     phone           TEXT    NOT NULL DEFAULT '',
     address         TEXT    NOT NULL DEFAULT '',

@@ -1,4 +1,4 @@
-"""Email engine for the coldpipe outreach system."""
+"""Mailer module for the coldpipe outreach system."""
 
 from .bounces import parse_dsn, process_bounce
 from .personalize import batch_personalize, personalize_opener

@@ -70,7 +70,7 @@ async def upsert_lead(db: aiosqlite.Connection, lead: Lead) -> int:
                first_name       = CASE WHEN excluded.first_name   != '' THEN excluded.first_name   ELSE leads.first_name   END,
                last_name        = CASE WHEN excluded.last_name    != '' THEN excluded.last_name    ELSE leads.last_name    END,
                company          = CASE WHEN excluded.company      != '' THEN excluded.company      ELSE leads.company      END,
-               job_title        = CASE WHEN excluded.job_title NOT IN ('', 'Dentist') THEN excluded.job_title ELSE leads.job_title END,
+               job_title        = CASE WHEN excluded.job_title != '' THEN excluded.job_title ELSE leads.job_title END,
                website          = CASE WHEN excluded.website      != '' THEN excluded.website      ELSE leads.website      END,
                phone            = CASE WHEN excluded.phone        != '' THEN excluded.phone        ELSE leads.phone        END,
                address          = CASE WHEN excluded.address      != '' THEN excluded.address      ELSE leads.address      END,

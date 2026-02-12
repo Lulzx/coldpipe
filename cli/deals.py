@@ -2,22 +2,17 @@
 
 from __future__ import annotations
 
-import asyncio
-
 import typer
 from rich.console import Console
 from rich.table import Table
 
+from cli import _run
 from config import setup_logging
 from db import get_db, queries
 from db.models import Deal
 
 console = Console()
 deals_app = typer.Typer(help="Deal pipeline management.")
-
-
-def _run(coro):
-    return asyncio.run(coro)
 
 
 @deals_app.command("list")

@@ -43,7 +43,7 @@ async def test_schema_tables_exist(db):
 async def test_schema_version(db):
     cursor = await db.execute("SELECT MAX(version) FROM schema_version")
     row = await cursor.fetchone()
-    assert row[0] == 1
+    assert row[0] == 2
 
 
 # ---------------------------------------------------------------------------

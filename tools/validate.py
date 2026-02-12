@@ -2,13 +2,10 @@
 
 import argparse
 import asyncio
-import os
 import random
 import string
 import sys
 import time
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from shared.csv_io import load_leads, save_csv
 

@@ -6,8 +6,8 @@ import pytest
 
 from db import queries
 from db.models import Campaign, EmailSent, Lead, Mailbox, SequenceStep
-from email_engine.queue import SendQueue, warmup_daily_limit
-from email_engine.sequences import advance_sequence, complete_sequence, handle_reply
+from mailer.queue import SendQueue, warmup_daily_limit
+from mailer.sequences import advance_sequence, complete_sequence, handle_reply
 
 # ---------------------------------------------------------------------------
 # Send queue

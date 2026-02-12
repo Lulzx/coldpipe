@@ -1,4 +1,4 @@
-"""Directory scrapers for Yelp, Healthgrades, and Zocdoc using Crawl4AI."""
+"""Directory scrapers for Yelp, Healthgrades, and Zocdoc using Crawl4AI CSS extraction."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from db.queries import upsert_lead
 # ---------------------------------------------------------------------------
 
 _YELP_SCHEMA = {
-    "name": "yelp_dentists",
+    "name": "yelp_results",
     "baseSelector": "li.y-css-1iy1dwt",
     "fields": [
         {"name": "company", "selector": "a.css-19v1rkv", "type": "text"},
@@ -29,7 +29,7 @@ _YELP_SCHEMA = {
 }
 
 _HEALTHGRADES_SCHEMA = {
-    "name": "healthgrades_dentists",
+    "name": "healthgrades_results",
     "baseSelector": "div.provider-card",
     "fields": [
         {"name": "first_name", "selector": "a.provider-name", "type": "text"},
@@ -41,7 +41,7 @@ _HEALTHGRADES_SCHEMA = {
 }
 
 _ZOCDOC_SCHEMA = {
-    "name": "zocdoc_dentists",
+    "name": "zocdoc_results",
     "baseSelector": "div[data-test='provider-card']",
     "fields": [
         {"name": "first_name", "selector": "h2[data-test='provider-name']", "type": "text"},
@@ -103,7 +103,7 @@ def _parse_address(raw: str) -> tuple[str, str, str, str]:
 
 
 class DirectoryScraper:
-    """Scrape dental directories (Yelp, Healthgrades, Zocdoc) via Crawl4AI CSS extraction."""
+    """Scrape directories (Yelp, Healthgrades, Zocdoc) via Crawl4AI CSS extraction."""
 
     async def scrape(
         self,

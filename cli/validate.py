@@ -2,21 +2,16 @@
 
 from __future__ import annotations
 
-import asyncio
-
 import typer
 from rich.console import Console
 from rich.progress import Progress
 
+from cli import _run
 from config import setup_logging
 from db import get_db, queries
 
 console = Console()
 validate_app = typer.Typer(help="Validate lead email addresses.")
-
-
-def _run(coro):
-    return asyncio.run(coro)
 
 
 @validate_app.command("run")

@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = (
     "Generate a unique 1-2 sentence email opener. "
-    "Reference ONE specific thing about the practice. "
+    "Reference ONE specific thing about the business. "
     "Under 30 words. No sycophancy."
 )
 
