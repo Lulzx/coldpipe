@@ -117,7 +117,7 @@ def load_all_leads(data_dir: str) -> list[dict]:
     for fname in sorted(os.listdir(data_dir)):
         if not fname.endswith(".csv"):
             continue
-        if fname == "dentist_emails.csv":
+        if fname.endswith("_emails.csv"):
             continue
         path = os.path.join(data_dir, fname)
         rows = load_leads(path)

@@ -1,15 +1,34 @@
 import re
 
 EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
+OBFUSC_RE = re.compile(
+    r"([a-zA-Z0-9._%+\-]+)"
+    r"\s*[\[\({\<]?\s*(?:at|AT)\s*[\]\)}\>]?\s*"
+    r"([a-zA-Z0-9.\-]+)"
+    r"\s*[\[\({\<]?\s*(?:dot|DOT)\s*[\]\)}\>]?\s*"
+    r"([a-zA-Z]{2,})"
+)
+CFEMAIL_RE = re.compile(r'data-cfemail="([0-9a-fA-F]+)"')
+JS_EMAIL_RE = re.compile(
+    r'["\']([a-zA-Z0-9._%+\-]+)["\']\s*\+\s*["\']@["\']\s*\+\s*'
+    r'["\']([a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})["\']'
+)
 
 JUNK_DOMAINS = {
     "sentry.io", "wixpress.com", "example.com", "domain.com", "yoursite.com",
     "email.com", "yourdomain.com", "test.com", "sentry-next.wixpress.com",
     "change.me", "exa.ai", "myftpupload.com", "googleapis.com", "w3.org",
     "schema.org", "gravatar.com", "wordpress.org", "wordpress.com",
+    "jquery.com", "google.com", "facebook.com", "twitter.com", "instagram.com",
+    "youtube.com", "linkedin.com", "cloudflare.com", "gstatic.com",
+    "bootstrapcdn.com", "fontawesome.com", "cloudfront.net", "amazonaws.com",
+    "googletagmanager.com", "doubleclick.net", "googlesyndication.com",
+    "google-analytics.com", "googleadservices.com", "hotjar.com",
+    "hubspot.com", "mailchimp.com", "unpkg.com",
 }
 
-JUNK_PREFIXES = ("noreply@", "no-reply@", "webmaster@", "root@", "admin@wordpress")
+JUNK_PREFIXES = ("noreply@", "no-reply@", "donotreply@", "mailer-daemon@",
+                 "webmaster@", "root@", "admin@wordpress")
 
 SKIP_DOMAINS = {"exa.ai"}
 
@@ -22,7 +41,19 @@ HDRS = {
     "Accept-Encoding": "gzip, deflate",
 }
 
-TIMEOUT = 5
+TIMEOUT = 8
 MAX_CONN = 500
 
-PATHS = ["", "/contact", "/contact-us", "/about", "/about-us", "/team", "/our-team"]
+PATHS = [
+    "", "/contact", "/contact-us", "/contact.html", "/contactus",
+    "/about", "/about-us", "/about.html", "/aboutus",
+    "/team", "/our-team", "/leadership", "/people",
+    "/company", "/support", "/connect", "/info",
+    "/privacy", "/privacy-policy", "/locations", "/offices",
+]
+
+CONTACT_KW = re.compile(
+    r"contact|about|team|staff|people|connect|reach|get.?in.?touch|"
+    r"leadership|email|support|help|info|who.?we.?are|company|meet|directory",
+    re.IGNORECASE,
+)
