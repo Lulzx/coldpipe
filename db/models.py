@@ -137,3 +137,21 @@ class TrackingEvent(msgspec.Struct, kw_only=True):
     event_type: Literal["reply", "bounce", "unsubscribe"] = "reply"
     metadata: str | None = None
     created_at: str = ""
+
+
+class User(msgspec.Struct, kw_only=True):
+    id: int = 0
+    username: str = ""
+    webauthn_credential_id: str = ""
+    webauthn_public_key: str = ""
+    webauthn_sign_count: int = 0
+    onboarding_completed: int = 0
+    created_at: str = ""
+
+
+class Session(msgspec.Struct, kw_only=True):
+    id: int = 0
+    token: str = ""
+    user_id: int = 0
+    created_at: str = ""
+    expires_at: str = ""

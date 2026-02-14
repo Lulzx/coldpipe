@@ -63,8 +63,8 @@ class EmailSender:
             return
         try:
             await self._client.noop()
-        except Exception:
-            log.warning("SMTP connection lost, reconnecting")
+        except Exception as exc:
+            log.warning("SMTP connection lost, reconnecting: %s", exc)
             self._client = None
             await self.connect()
 
@@ -114,7 +114,8 @@ class EmailSender:
         for attempt in range(MAX_RETRIES):
             try:
                 await self._ensure_connected()
-                assert self._client is not None
+                if self._client is None:
+                    raise RuntimeError("SMTP client not connected after _ensure_connected")
                 await self._client.send_message(msg)
                 log.info("Sent email to %s (id=%s)", to_addr, message_id)
                 return message_id

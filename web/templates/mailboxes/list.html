@@ -53,6 +53,7 @@
               <a href="/mailboxes/{{ mb.id }}/edit" class="btn btn-sm">Edit</a>
               {% if mb.is_active %}
               <form method="post" action="/mailboxes/{{ mb.id }}/deactivate" onsubmit="return confirm('Deactivate this mailbox?')">
+                <input type="hidden" name="_csrf" value="{{ csrf_token }}">
                 <button type="submit" class="btn btn-sm btn-outline-danger">Deactivate</button>
               </form>
               {% endif %}

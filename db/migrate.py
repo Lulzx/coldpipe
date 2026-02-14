@@ -34,6 +34,25 @@ MIGRATIONS: dict[int, str] = {
         ALTER TABLE leads ADD COLUMN email_source TEXT NOT NULL DEFAULT '';
         ALTER TABLE leads ADD COLUMN email_provider TEXT NOT NULL DEFAULT '';
     """,
+    3: """
+        CREATE TABLE IF NOT EXISTS users (
+            id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+            username              TEXT NOT NULL UNIQUE,
+            webauthn_credential_id TEXT NOT NULL DEFAULT '',
+            webauthn_public_key   TEXT NOT NULL DEFAULT '',
+            webauthn_sign_count   INTEGER NOT NULL DEFAULT 0,
+            onboarding_completed  INTEGER NOT NULL DEFAULT 0,
+            created_at            TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );
+        CREATE TABLE IF NOT EXISTS sessions (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            token       TEXT NOT NULL UNIQUE,
+            user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            expires_at  TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
+    """,
 }
 
 

@@ -16,12 +16,17 @@ def _get_or_create_key() -> bytes | None:
     try:
         if _KEYFILE.exists():
             return _KEYFILE.read_bytes().strip()
+        import os
+
         from cryptography.fernet import Fernet
 
         key = Fernet.generate_key()
         _KEYFILE.parent.mkdir(parents=True, exist_ok=True)
-        _KEYFILE.write_bytes(key)
-        _KEYFILE.chmod(0o600)
+        fd = os.open(str(_KEYFILE), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            os.write(fd, key)
+        finally:
+            os.close(fd)
         return key
     except Exception:
         log.warning("crypto_key_unavailable", exc_info=True)

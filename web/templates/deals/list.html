@@ -24,6 +24,7 @@
     </div>
     <div class="card-body">
       <form method="post" action="/deals/create">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
         <div class="row g-3">
           <div class="col-md-3">
             <label class="form-label">Lead ID</label>
@@ -107,6 +108,7 @@
                 {% for s in stages %}
                 {% if s != d.stage %}
                 <form method="post" action="/deals/{{ d.id }}/move" class="d-inline">
+                  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
                   <input type="hidden" name="stage" value="{{ s }}">
                   <button type="submit" class="dropdown-item">{{ s|replace('_', ' ')|title }}</button>
                 </form>

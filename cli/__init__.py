@@ -114,10 +114,10 @@ def db_health():
                 from db.migrate import get_version
 
                 version = await get_version(db)
-                if version == 2:
+                if version == 3:
                     typer.echo(f"[OK] Schema version: {version}")
                 else:
-                    typer.echo(f"[WARN] Schema version: {version} (expected 2)", err=True)
+                    typer.echo(f"[WARN] Schema version: {version} (expected 3)", err=True)
                     checks_passed = False
         except Exception as e:
             typer.echo(f"[FAIL] Database connection: {e}", err=True)
@@ -181,6 +181,7 @@ def _register_subapps():
     from cli.mailbox import mailbox_app
     from cli.scrape import scrape_app
     from cli.send import send_app
+    from cli.setup import _setup
     from cli.track import track_app
     from cli.validate import validate_app
 
@@ -194,6 +195,11 @@ def _register_subapps():
     app.add_typer(deals_app, name="deals")
     app.add_typer(mailbox_app, name="mailbox")
     app.add_typer(daemon_app, name="daemon")
+
+    @app.command()
+    def setup():
+        """Interactive setup wizard for first-time configuration."""
+        _setup()
 
 
 _register_subapps()

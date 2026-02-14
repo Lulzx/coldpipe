@@ -16,7 +16,9 @@ from .models import (
     Lead,
     Mailbox,
     SequenceStep,
+    Session,
     TrackingEvent,
+    User,
 )
 
 
@@ -26,6 +28,11 @@ def _now() -> str:
 
 def _row_to_struct[T](row: aiosqlite.Row, cls: type[T], keys: list[str]) -> T:
     return cls(**dict(zip(keys, row, strict=False)))
+
+
+def _escape_like(value: str) -> str:
+    """Escape special LIKE characters (%, _, \\) for safe use in LIKE clauses."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 # ---------------------------------------------------------------------------
@@ -117,7 +124,8 @@ async def upsert_lead(db: aiosqlite.Connection, lead: Lead) -> int:
     await db.commit()
     cursor = await db.execute("SELECT id FROM leads WHERE email = ?", (lead.email,))
     row = await cursor.fetchone()
-    assert row is not None
+    if row is None:
+        raise RuntimeError(f"Lead not found after upsert: {lead.email}")
     return row[0]
 
 
@@ -174,11 +182,12 @@ async def get_lead_by_email(db: aiosqlite.Connection, email: str) -> Lead | None
 
 async def search_leads(db: aiosqlite.Connection, query: str, *, limit: int = 50) -> list[Lead]:
     """Search leads by email, name, or company (LIKE match)."""
-    pattern = f"%{query}%"
+    pattern = f"%{_escape_like(query)}%"
     cursor = await db.execute(
         """SELECT * FROM leads
-           WHERE email LIKE ? OR first_name LIKE ? OR last_name LIKE ?
-                 OR company LIKE ? OR website LIKE ?
+           WHERE email LIKE ? ESCAPE '\\' OR first_name LIKE ? ESCAPE '\\'
+                 OR last_name LIKE ? ESCAPE '\\' OR company LIKE ? ESCAPE '\\'
+                 OR website LIKE ? ESCAPE '\\'
            ORDER BY id DESC LIMIT ?""",
         (pattern, pattern, pattern, pattern, pattern, limit),
     )
@@ -194,8 +203,7 @@ async def count_leads(db: aiosqlite.Connection, *, email_status: str | None = No
         params.append(email_status)
     cursor = await db.execute(q, params)
     row = await cursor.fetchone()
-    assert row is not None
-    return row[0]
+    return row[0] if row is not None else 0
 
 
 async def delete_lead(db: aiosqlite.Connection, lead_id: int) -> bool:
@@ -262,7 +270,8 @@ async def upsert_mailbox(db: aiosqlite.Connection, mb: Mailbox) -> int:
     await db.commit()
     cursor = await db.execute("SELECT id FROM mailboxes WHERE email = ?", (mb.email,))
     row = await cursor.fetchone()
-    assert row is not None
+    if row is None:
+        raise RuntimeError(f"Mailbox not found after upsert: {mb.email}")
     return row[0]
 
 
@@ -345,7 +354,8 @@ async def create_campaign(db: aiosqlite.Connection, camp: Campaign) -> int:
         ),
     )
     await db.commit()
-    assert cursor.lastrowid is not None
+    if cursor.lastrowid is None:
+        raise RuntimeError("Failed to create campaign: no lastrowid")
     return cursor.lastrowid
 
 
@@ -405,7 +415,8 @@ async def add_sequence_step(db: aiosqlite.Connection, step: SequenceStep) -> int
         ),
     )
     await db.commit()
-    assert cursor.lastrowid is not None
+    if cursor.lastrowid is None:
+        raise RuntimeError("Failed to add sequence step: no lastrowid")
     return cursor.lastrowid
 
 
@@ -570,7 +581,8 @@ async def log_send(db: aiosqlite.Connection, es: EmailSent) -> int:
         ),
     )
     await db.commit()
-    assert cursor.lastrowid is not None
+    if cursor.lastrowid is None:
+        raise RuntimeError("Failed to log send: no lastrowid")
     return cursor.lastrowid
 
 
@@ -626,8 +638,7 @@ async def count_emails_sent(db: aiosqlite.Connection, *, status: str | None = No
         params.append(status)
     cursor = await db.execute(q, params)
     row = await cursor.fetchone()
-    assert row is not None
-    return row[0]
+    return row[0] if row is not None else 0
 
 
 async def get_email_by_message_id(db: aiosqlite.Connection, message_id: str) -> EmailSent | None:
@@ -673,8 +684,7 @@ async def increment_daily_send(db: aiosqlite.Connection, mailbox_id: int) -> int
         (mailbox_id, today),
     )
     row = await cursor.fetchone()
-    assert row is not None
-    return row[0]
+    return row[0] if row is not None else 0
 
 
 # ---------------------------------------------------------------------------
@@ -718,7 +728,8 @@ async def upsert_deal(db: aiosqlite.Connection, deal: Deal) -> int:
         ),
     )
     await db.commit()
-    assert cursor.lastrowid is not None
+    if cursor.lastrowid is None:
+        raise RuntimeError("Failed to upsert deal: no lastrowid")
     return cursor.lastrowid
 
 
@@ -756,7 +767,8 @@ async def log_tracking_event(db: aiosqlite.Connection, evt: TrackingEvent) -> in
         (evt.email_sent_id, evt.event_type, evt.metadata),
     )
     await db.commit()
-    assert cursor.lastrowid is not None
+    if cursor.lastrowid is None:
+        raise RuntimeError("Failed to log tracking event: no lastrowid")
     return cursor.lastrowid
 
 
@@ -808,8 +820,7 @@ async def get_lead_stats(db: aiosqlite.Connection) -> dict:
 
     cursor = await db.execute("SELECT COUNT(*) FROM leads")
     total_row = await cursor.fetchone()
-    assert total_row is not None
-    result["total"] = total_row[0]
+    result["total"] = total_row[0] if total_row is not None else 0
     return result
 
 
@@ -943,7 +954,8 @@ async def get_today_activity(db: aiosqlite.Connection) -> dict:
         (today,),
     )
     row = await cursor.fetchone()
-    assert row is not None
+    if row is None:
+        return {"sent": 0, "replies": 0, "bounces": 0}
     return {"sent": row[0] or 0, "replies": row[1] or 0, "bounces": row[2] or 0}
 
 
@@ -996,3 +1008,128 @@ async def get_campaign_stats(db: aiosqlite.Connection, campaign_id: int) -> dict
         return {}
     cols = [d[0] for d in cursor.description]
     return dict(zip(cols, row, strict=False))
+
+
+# ---------------------------------------------------------------------------
+# Users & Sessions (auth)
+# ---------------------------------------------------------------------------
+
+_USER_COLS = [
+    "id",
+    "username",
+    "webauthn_credential_id",
+    "webauthn_public_key",
+    "webauthn_sign_count",
+    "onboarding_completed",
+    "created_at",
+]
+
+_SESSION_COLS = ["id", "token", "user_id", "created_at", "expires_at"]
+
+
+async def get_user_count(db: aiosqlite.Connection) -> int:
+    cursor = await db.execute("SELECT COUNT(*) FROM users")
+    row = await cursor.fetchone()
+    return row[0] if row else 0
+
+
+async def get_user_by_id(db: aiosqlite.Connection, user_id: int) -> User | None:
+    cursor = await db.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+    row = await cursor.fetchone()
+    if row is None:
+        return None
+    return _row_to_struct(row, User, _USER_COLS)
+
+
+async def get_user_by_username(db: aiosqlite.Connection, username: str) -> User | None:
+    cursor = await db.execute("SELECT * FROM users WHERE username = ?", (username,))
+    row = await cursor.fetchone()
+    if row is None:
+        return None
+    return _row_to_struct(row, User, _USER_COLS)
+
+
+async def create_user(db: aiosqlite.Connection, user: User) -> int:
+    cursor = await db.execute(
+        """INSERT INTO users (username, webauthn_credential_id, webauthn_public_key,
+                              webauthn_sign_count, onboarding_completed)
+           VALUES (?, ?, ?, ?, ?)""",
+        (
+            user.username,
+            user.webauthn_credential_id,
+            user.webauthn_public_key,
+            user.webauthn_sign_count,
+            user.onboarding_completed,
+        ),
+    )
+    await db.commit()
+    if cursor.lastrowid is None:
+        raise RuntimeError("Failed to create user: no lastrowid")
+    return cursor.lastrowid
+
+
+async def update_user_credential(
+    db: aiosqlite.Connection,
+    user_id: int,
+    *,
+    credential_id: str,
+    public_key: str,
+    sign_count: int,
+) -> None:
+    await db.execute(
+        """UPDATE users SET webauthn_credential_id = ?, webauthn_public_key = ?,
+                            webauthn_sign_count = ? WHERE id = ?""",
+        (credential_id, public_key, sign_count, user_id),
+    )
+    await db.commit()
+
+
+async def update_user_sign_count(
+    db: aiosqlite.Connection, user_id: int, sign_count: int
+) -> None:
+    await db.execute(
+        "UPDATE users SET webauthn_sign_count = ? WHERE id = ?",
+        (sign_count, user_id),
+    )
+    await db.commit()
+
+
+async def set_onboarding_completed(db: aiosqlite.Connection, user_id: int) -> None:
+    await db.execute(
+        "UPDATE users SET onboarding_completed = 1 WHERE id = ?", (user_id,)
+    )
+    await db.commit()
+
+
+async def create_session(
+    db: aiosqlite.Connection, token: str, user_id: int, expires_at: str
+) -> int:
+    cursor = await db.execute(
+        "INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)",
+        (token, user_id, expires_at),
+    )
+    await db.commit()
+    if cursor.lastrowid is None:
+        raise RuntimeError("Failed to create session: no lastrowid")
+    return cursor.lastrowid
+
+
+async def get_session_by_token(db: aiosqlite.Connection, token: str) -> Session | None:
+    cursor = await db.execute("SELECT * FROM sessions WHERE token = ?", (token,))
+    row = await cursor.fetchone()
+    if row is None:
+        return None
+    return _row_to_struct(row, Session, _SESSION_COLS)
+
+
+async def delete_session(db: aiosqlite.Connection, token: str) -> None:
+    await db.execute("DELETE FROM sessions WHERE token = ?", (token,))
+    await db.commit()
+
+
+async def cleanup_expired_sessions(db: aiosqlite.Connection) -> int:
+    cursor = await db.execute(
+        "DELETE FROM sessions WHERE expires_at < ?", (_now(),)
+    )
+    await db.commit()
+    return cursor.rowcount

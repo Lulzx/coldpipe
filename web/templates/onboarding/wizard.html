@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Setup - Coldpipe{% endblock %}
+{% block content %}
+<div class="page-header d-print-none mb-3">
+  <div class="row align-items-center">
+    <div class="col">
+      <h2 class="page-title">Welcome to Coldpipe</h2>
+      <p class="text-muted">Let's get you set up in a few steps.</p>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <ul class="steps steps-counter steps-blue">
+      <li class="step-item{% if step == 1 %} active{% elif step > 1 %} active{% endif %}">Settings</li>
+      <li class="step-item{% if step == 2 %} active{% elif step > 2 %} active{% endif %}">Mailbox</li>
+      <li class="step-item{% if step == 3 %} active{% endif %}">Done</li>
+    </ul>
+  </div>
+</div>
+
+{% if step == 1 %}
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title">Configure Settings</h3>
+  </div>
+  <div class="card-body">
+    <form method="post" action="/onboarding/settings">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <div class="mb-3">
+        <label class="form-label">Timezone</label>
+        <input type="text" name="timezone" class="form-control" value="America/New_York" placeholder="e.g. America/New_York">
+        <small class="form-hint">IANA timezone for send window scheduling</small>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Daily Send Limit</label>
+        <input type="number" name="daily_limit" class="form-control" value="30" min="1" max="500">
+        <small class="form-hint">Maximum emails to send per day per mailbox</small>
+      </div>
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Save & Continue</button>
+        <a href="/onboarding?step=2" class="btn">Skip</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% elif step == 2 %}
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title">Add Your First Mailbox</h3>
+  </div>
+  <div class="card-body">
+    <form method="post" action="/onboarding/mailbox">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <div class="mb-3">
+        <label class="form-label required">Email Address</label>
+        <input type="email" name="email" class="form-control" required placeholder="you@example.com">
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Display Name</label>
+        <input type="text" name="display_name" class="form-control" placeholder="Your Name">
+      </div>
+      <h4 class="mt-4 mb-3">SMTP Settings</h4>
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label class="form-label required">SMTP Host</label>
+          <input type="text" name="smtp_host" class="form-control" value="smtp.gmail.com" required>
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="form-label">SMTP Port</label>
+          <input type="number" name="smtp_port" class="form-control" value="587">
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label class="form-label">SMTP User</label>
+          <input type="text" name="smtp_user" class="form-control">
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="form-label">SMTP Password</label>
+          <input type="password" name="smtp_pass" class="form-control">
+        </div>
+      </div>
+      <h4 class="mt-4 mb-3">IMAP Settings</h4>
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label class="form-label">IMAP Host</label>
+          <input type="text" name="imap_host" class="form-control" value="imap.gmail.com">
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="form-label">IMAP Port</label>
+          <input type="number" name="imap_port" class="form-control" value="993">
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label class="form-label">IMAP User</label>
+          <input type="text" name="imap_user" class="form-control">
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="form-label">IMAP Password</label>
+          <input type="password" name="imap_pass" class="form-control">
+        </div>
+      </div>
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Add Mailbox & Continue</button>
+        <a href="/onboarding?step=3" class="btn">Skip</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% elif step == 3 %}
+<div class="card">
+  <div class="card-body text-center py-5">
+    <div class="mb-3">
+      <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-lg text-green" width="48" height="48" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M5 12l5 5l10 -10"/></svg>
+    </div>
+    <h2>You're all set!</h2>
+    <p class="text-muted">Coldpipe is ready to use. You can always change settings later.</p>
+    <form method="post" action="/onboarding/complete">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <button type="submit" class="btn btn-primary btn-lg mt-3">Go to Dashboard</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

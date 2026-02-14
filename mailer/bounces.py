@@ -54,13 +54,15 @@ def parse_dsn(raw_bytes: bytes) -> dict | None:
                 if isinstance(payload, list):
                     for sub in payload:
                         text = str(sub)
-                        _extract_dsn_fields(text, locals_dict := {})
-                        status_code = status_code or locals_dict.get("status_code", "")
-                        diagnostic = diagnostic or locals_dict.get("diagnostic", "")
+                        fields: dict = {}
+                        _extract_dsn_fields(text, fields)
+                        status_code = status_code or fields.get("status_code", "")
+                        diagnostic = diagnostic or fields.get("diagnostic", "")
                 elif isinstance(payload, str):
-                    _extract_dsn_fields(payload, locals_dict := {})
-                    status_code = locals_dict.get("status_code", "")
-                    diagnostic = locals_dict.get("diagnostic", "")
+                    fields = {}
+                    _extract_dsn_fields(payload, fields)
+                    status_code = fields.get("status_code", "")
+                    diagnostic = fields.get("diagnostic", "")
 
             elif ct == "message/rfc822":
                 # Extract original Message-ID

@@ -24,6 +24,7 @@ dependencies = [
     "exa-py~=2.4",
     "cryptography~=46.0",
     "aiohttp-jinja2~=1.6",
+    "webauthn~=2.7",
 ]
 
 [project.scripts]

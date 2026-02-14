@@ -50,6 +50,13 @@ class ScraperSettings(msgspec.Struct, kw_only=True, frozen=True):
     dedup_threshold: int = 85
 
 
+class WebSettings(msgspec.Struct, kw_only=True, frozen=True):
+    rp_id: str = "localhost"
+    rp_name: str = "Coldpipe"
+    host: str = "127.0.0.1"
+    port: int = 8080
+
+
 class Settings(msgspec.Struct, kw_only=True):
     db_path: str = str(DB_PATH)
     smtp: SmtpSettings = SmtpSettings()
@@ -57,6 +64,7 @@ class Settings(msgspec.Struct, kw_only=True):
     send: SendSettings = SendSettings()
     llm: LlmSettings = LlmSettings()
     scraper: ScraperSettings = ScraperSettings()
+    web: WebSettings = WebSettings()
     anthropic_api_key: str = ""
     exa_api_key: str = ""
     log_level: str = "INFO"
@@ -78,7 +86,7 @@ class Settings(msgspec.Struct, kw_only=True):
 
         try:
             ZoneInfo(self.send.timezone)
-        except KeyError, ValueError:
+        except (KeyError, ValueError):
             errors.append(f"send.timezone is not a valid IANA zone: {self.send.timezone!r}")
 
         if not 1 <= self.scraper.max_concurrent <= 500:

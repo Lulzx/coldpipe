@@ -19,14 +19,17 @@
     <div class="col-auto d-flex gap-2">
       {% if campaign.status == 'active' %}
       <form method="post" action="/campaigns/{{ campaign.id }}/pause">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
         <button type="submit" class="btn btn-warning">Pause</button>
       </form>
       {% elif campaign.status == 'paused' or campaign.status == 'draft' %}
       <form method="post" action="/campaigns/{{ campaign.id }}/resume">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
         <button type="submit" class="btn btn-success">Resume</button>
       </form>
       {% endif %}
       <form method="post" action="/campaigns/{{ campaign.id }}/delete" onsubmit="return confirm('Delete this campaign? This cannot be undone.')">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
         <button type="submit" class="btn btn-outline-danger">Delete</button>
       </form>
     </div>

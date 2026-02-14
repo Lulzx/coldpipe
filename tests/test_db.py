@@ -43,7 +43,7 @@ async def test_schema_tables_exist(db):
 async def test_schema_version(db):
     cursor = await db.execute("SELECT MAX(version) FROM schema_version")
     row = await cursor.fetchone()
-    assert row[0] == 2
+    assert row[0] == 3
 
 
 # ---------------------------------------------------------------------------
@@ -625,7 +625,7 @@ async def test_migrate_idempotent(db):
 
     v1 = await migrate(db)
     v2 = await migrate(db)
-    assert v1 == v2 == 2
+    assert v1 == v2 == 3
 
 
 @pytest.mark.asyncio

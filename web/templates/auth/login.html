@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login - Coldpipe</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.4.0/dist/css/tabler.min.css">
+</head>
+<body class="d-flex flex-column bg-white">
+  <div class="page page-center">
+    <div class="container container-tight py-4">
+      <div class="text-center mb-4">
+        <h1>Coldpipe</h1>
+        <p class="text-muted">Sign in to your account</p>
+      </div>
+      <div class="card card-md">
+        <div class="card-body">
+          <h2 class="card-title text-center mb-4">Login</h2>
+          <div id="error-msg" class="alert alert-danger d-none"></div>
+          <div class="form-footer">
+            <button id="login-btn" class="btn btn-primary w-100" type="button">
+              Sign in with Passkey
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+<script>
+function b64urlToBuffer(b64url) {
+  const pad = b64url.length % 4;
+  if (pad) b64url += '='.repeat(4 - pad);
+  const bin = atob(b64url.replace(/-/g, '+').replace(/_/g, '/'));
+  const buf = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  return buf.buffer;
+}
+function bufferToB64url(buf) {
+  const bytes = new Uint8Array(buf);
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+document.getElementById('login-btn').addEventListener('click', async () => {
+  const errorEl = document.getElementById('error-msg');
+  errorEl.classList.add('d-none');
+  try {
+    const optRes = await fetch('/auth/login/begin', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'});
+    if (!optRes.ok) { const e = await optRes.json(); throw new Error(e.error || 'Failed'); }
+    const options = await optRes.json();
+    options.challenge = b64urlToBuffer(options.challenge);
+    if (options.allowCredentials) {
+      options.allowCredentials = options.allowCredentials.map(c => ({...c, id: b64urlToBuffer(c.id)}));
+    }
+    const assertion = await navigator.credentials.get({publicKey: options});
+    const body = {
+      id: assertion.id,
+      rawId: bufferToB64url(assertion.rawId),
+      type: assertion.type,
+      response: {
+        authenticatorData: bufferToB64url(assertion.response.authenticatorData),
+        clientDataJSON: bufferToB64url(assertion.response.clientDataJSON),
+        signature: bufferToB64url(assertion.response.signature),
+      }
+    };
+    if (assertion.response.userHandle) {
+      body.response.userHandle = bufferToB64url(assertion.response.userHandle);
+    }
+    const verRes = await fetch('/auth/login/complete', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body)
+    });
+    const result = await verRes.json();
+    if (result.ok) { window.location.href = result.redirect || '/'; }
+    else { throw new Error(result.error || 'Login failed'); }
+  } catch (err) {
+    errorEl.textContent = err.message || 'Login failed';
+    errorEl.classList.remove('d-none');
+  }
+});
+</script>
+</body>
+</html>

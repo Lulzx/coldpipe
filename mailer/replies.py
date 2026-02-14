@@ -83,7 +83,8 @@ class ReplyWatcher:
 
         Returns True if the message matched a sent email.
         """
-        assert self._client is not None
+        if self._client is None:
+            raise RuntimeError("IMAP client not connected")
         result, data = await self._client.uid("fetch", uid, "(RFC822)")
         if result != "OK" or not data:
             return False
@@ -135,7 +136,8 @@ class ReplyWatcher:
         if self._client is None:
             await self.connect()
 
-        assert self._client is not None
+        if self._client is None:
+            raise RuntimeError("IMAP client not connected")
         result, data = await self._client.uid("search", "UNSEEN")
         if result != "OK":
             log.warning("IMAP search failed: %s", result)
