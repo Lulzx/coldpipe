@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}Settings - Coldpipe{% endblock %}
+{% block content %}
+<div class="page-header d-print-none mb-3">
+  <div class="row align-items-center">
+    <div class="col">
+      <h2 class="page-title">Settings</h2>
+      <div class="text-muted mt-1">Read-only configuration view</div>
+    </div>
+  </div>
+</div>
+
+<div class="row row-cards">
+  <div class="col-lg-6">
+    <div class="card mb-3">
+      <div class="card-header">
+        <h3 class="card-title">SMTP</h3>
+      </div>
+      <div class="card-body">
+        <div class="datagrid">
+          <div class="datagrid-item">
+            <div class="datagrid-title">Host</div>
+            <div class="datagrid-content">{{ settings.smtp.host }}</div>
+          </div>
+          <div class="datagrid-item">
+            <div class="datagrid-title">Port</div>
+            <div class="datagrid-content">{{ settings.smtp.port }}</div>
+          </div>
+          <div class="datagrid-item">
+            <div class="datagrid-title">User</div>
+            <div class="datagrid-content">{{ settings.smtp.user or '-' }}</div>
+          </div>
+          <div class="datagrid-item">
+            <div class="datagrid-title">Password</div>
+            <div class="datagrid-content">{{ mask(settings.smtp.password) or '-' }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card mb-3">
+      <div class="card-header">
+        <h3 class="card-title">IMAP</h3>
+      </div>
+      <div class="card-body">
+        <div class="datagrid">
+          <div class="datagrid-item">
+            <div class="datagrid-title">Host</div>
+            <div class="datagrid-content">{{ settings.imap.host }}</div>
+          </div>
+          <div class="datagrid-item">
+            <div class="datagrid-title">Port</div>
+            <div class="datagrid-content">{{ settings.imap.port }}</div>
+          </div>
+          <div class="datagrid-item">
+            <div class="datagrid-title">User</div>
+            <div class="datagrid-content">{{ settings.imap.user or '-' }}</div>
+          </div>
+          <div class="datagrid-item">
+            <div class="datagrid-title">Password</div>
+            <div class="datagrid-content">{{ mask(settings.imap.password) or '-' }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card mb-3">
+      <div class="card-header">
+        <h3 class="card-title">Send Settings</h3>
+      </div>
+      <div class="card-body">
+        <div class="datagrid">
+          <div class="datagrid-item">
+            <div class="datagrid-title">Daily Limit</div>
+            <div class="datagrid-content">{{ settings.send.daily_limit }}</div>
+          </div>
+          <div class="datagrid-item">
+            <div class="datagrid-title">Send Window</div>
+            <div class="datagrid-content">{{ settings.send.send_window_start }} - {{ settings.send.send_window_end }}</div>
+          </div>
+          <div class="datagrid-item">
+            <div class="datagrid-title">Timezone</div>
+            <div class="datagrid-content">{{ settings.send.timezone }}</div>
+          </div>
+          <div class="datagrid-item">
+            <div class="datagrid-title">Delay Range</div>
+            <div class="datagrid-content">{{ settings.send.min_delay_seconds }}s - {{ settings.send.max_delay_seconds }}s</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card mb-3">
+      <div class="card-header">
+        <h3 class="card-title">LLM</h3>
+      </div>
+      <div class="card-body">
+        <div class="datagrid">
+          <div class="datagrid-item">
+            <div class="datagrid-title">Model</div>
+            <div class="datagrid-content">{{ settings.llm.model }}</div>
+          </div>
+          <div class="datagrid-item">
+            <div class="datagrid-title">Max Concurrent</div>
+            <div class="datagrid-content">{{ settings.llm.max_concurrent }}</div>
+          </div>
+          <div class="datagrid-item">
+            <div class="datagrid-title">Max Opener Words</div>
+            <div class="datagrid-content">{{ settings.llm.max_opener_words }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card mb-3">
+      <div class="card-header">
+        <h3 class="card-title">Scraper</h3>
+      </div>
+      <div class="card-body">
+        <div class="datagrid">
+          <div class="datagrid-item">
+            <div class="datagrid-title">Max Concurrent</div>
+            <div class="datagrid-content">{{ settings.scraper.max_concurrent }}</div>
+          </div>
+          <div class="datagrid-item">
+            <div class="datagrid-title">Timeout</div>
+            <div class="datagrid-content">{{ settings.scraper.timeout }}s</div>
+          </div>
+          <div class="datagrid-item">
+            <div class="datagrid-title">Dedup Threshold</div>
+            <div class="datagrid-content">{{ settings.scraper.dedup_threshold }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card mb-3">
+      <div class="card-header">
+        <h3 class="card-title">API Keys</h3>
+      </div>
+      <div class="card-body">
+        <div class="datagrid">
+          <div class="datagrid-item">
+            <div class="datagrid-title">Anthropic API Key</div>
+            <div class="datagrid-content">{{ mask(settings.anthropic_api_key) or 'Not set' }}</div>
+          </div>
+          <div class="datagrid-item">
+            <div class="datagrid-title">Exa API Key</div>
+            <div class="datagrid-content">{{ mask(settings.exa_api_key) or 'Not set' }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

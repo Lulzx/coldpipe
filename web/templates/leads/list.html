@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Leads - Coldpipe{% endblock %}
+{% block content %}
+<div class="page-header d-print-none mb-3">
+  <div class="row align-items-center">
+    <div class="col">
+      <h2 class="page-title">Leads</h2>
+      <div class="text-muted mt-1">{{ total }} lead{{ 's' if total != 1 }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="row g-2">
+      <div class="col-auto">
+        <form method="get" action="/leads/search" class="d-flex">
+          <input type="text" name="q" class="form-control" placeholder="Search leads..." value="{{ search_query|default('') }}">
+          <button type="submit" class="btn btn-primary ms-2">Search</button>
+        </form>
+      </div>
+      <div class="col-auto">
+        <form method="get" action="/leads" class="d-flex gap-2">
+          <select name="status" class="form-select" onchange="this.form.submit()">
+            <option value="">All statuses</option>
+            {% for s in ['unknown', 'valid', 'invalid', 'catch_all', 'risky', 'missing'] %}
+            <option value="{{ s }}"{% if status == s %} selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+          <input type="text" name="source" class="form-control" placeholder="Source..." value="{{ source }}" onchange="this.form.submit()">
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-vcenter card-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Email</th>
+          <th>Name</th>
+          <th>Company</th>
+          <th>Status</th>
+          <th>Source</th>
+          <th>Created</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for lead in leads %}
+        <tr>
+          <td>{{ lead.id }}</td>
+          <td><a href="/leads/{{ lead.id }}">{{ lead.email }}</a></td>
+          <td>{{ lead.first_name }} {{ lead.last_name }}</td>
+          <td>{{ lead.company }}</td>
+          <td>
+            {% if lead.email_status == 'valid' %}
+            <span class="badge bg-green-lt">valid</span>
+            {% elif lead.email_status == 'invalid' %}
+            <span class="badge bg-red-lt">invalid</span>
+            {% elif lead.email_status == 'catch_all' %}
+            <span class="badge bg-yellow-lt">catch_all</span>
+            {% elif lead.email_status == 'risky' %}
+            <span class="badge bg-orange-lt">risky</span>
+            {% else %}
+            <span class="badge bg-secondary-lt">{{ lead.email_status }}</span>
+            {% endif %}
+          </td>
+          <td>{{ lead.source }}</td>
+          <td>{{ lead.created_at[:10] if lead.created_at else '-' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-muted">No leads found</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% include "_partials/pagination.html" %}
+{% endblock %}

@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Campaigns - Coldpipe{% endblock %}
+{% block content %}
+<div class="page-header d-print-none mb-3">
+  <div class="row align-items-center">
+    <div class="col">
+      <h2 class="page-title">Campaigns</h2>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <ul class="nav nav-tabs card-header-tabs">
+      <li class="nav-item">
+        <a class="nav-link{% if not status %} active{% endif %}" href="/campaigns">All</a>
+      </li>
+      {% for s in ['draft', 'active', 'paused', 'completed', 'archived'] %}
+      <li class="nav-item">
+        <a class="nav-link{% if status == s %} active{% endif %}" href="/campaigns?status={{ s }}">{{ s|capitalize }}</a>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-vcenter card-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Status</th>
+          <th>Mailbox ID</th>
+          <th>Daily Limit</th>
+          <th>Created</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in campaigns %}
+        <tr>
+          <td><a href="/campaigns/{{ c.id }}">{{ c.name }}</a></td>
+          <td>
+            {% if c.status == 'active' %}
+            <span class="badge bg-green-lt">active</span>
+            {% elif c.status == 'paused' %}
+            <span class="badge bg-yellow-lt">paused</span>
+            {% elif c.status == 'completed' %}
+            <span class="badge bg-blue-lt">completed</span>
+            {% elif c.status == 'draft' %}
+            <span class="badge bg-secondary-lt">draft</span>
+            {% else %}
+            <span class="badge bg-secondary-lt">{{ c.status }}</span>
+            {% endif %}
+          </td>
+          <td>{{ c.mailbox_id or '-' }}</td>
+          <td>{{ c.daily_limit }}</td>
+          <td>{{ c.created_at[:10] if c.created_at else '-' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="text-muted">No campaigns found</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

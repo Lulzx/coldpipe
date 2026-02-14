@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Mailboxes - Coldpipe{% endblock %}
+{% block content %}
+<div class="page-header d-print-none mb-3">
+  <div class="row align-items-center">
+    <div class="col">
+      <h2 class="page-title">Mailboxes</h2>
+    </div>
+    <div class="col-auto">
+      <a href="/mailboxes/add" class="btn btn-primary">Add Mailbox</a>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-vcenter card-table">
+      <thead>
+        <tr>
+          <th>Email</th>
+          <th>SMTP Host</th>
+          <th>Daily Usage</th>
+          <th>Warmup Day</th>
+          <th>Active</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for mb in mailboxes %}
+        {% set u = usage.get(mb.id, {'sent': 0, 'limit': mb.daily_limit}) %}
+        {% set pct = (u.sent / u.limit * 100) if u.limit > 0 else 0 %}
+        <tr>
+          <td>{{ mb.email }}</td>
+          <td>{{ mb.smtp_host }}:{{ mb.smtp_port }}</td>
+          <td>
+            <div class="d-flex align-items-center gap-2">
+              <div class="progress flex-grow-1" style="height: 6px; min-width: 80px;">
+                <div class="progress-bar{% if pct > 90 %} bg-red{% elif pct > 70 %} bg-yellow{% else %} bg-green{% endif %}" style="width: {{ pct }}%"></div>
+              </div>
+              <span class="text-muted small">{{ u.sent }}/{{ u.limit }}</span>
+            </div>
+          </td>
+          <td>{{ mb.warmup_day }}</td>
+          <td>
+            {% if mb.is_active %}
+            <span class="status-dot status-dot-animated status-green"></span> Active
+            {% else %}
+            <span class="status-dot status-red"></span> Inactive
+            {% endif %}
+          </td>
+          <td>
+            <a href="/mailboxes/{{ mb.id }}/edit" class="btn btn-sm">Edit</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-muted">No mailboxes configured</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

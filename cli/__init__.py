@@ -147,6 +147,27 @@ def db_health():
 
 
 # ---------------------------------------------------------------------------
+# Web dashboard
+# ---------------------------------------------------------------------------
+
+
+@app.command("web")
+def web_serve(
+    host: str = typer.Option("127.0.0.1", help="Host to bind to"),
+    port: int = typer.Option(8080, help="Port to listen on"),
+):
+    """Start the web dashboard."""
+    from aiohttp import web
+
+    from web.server import create_app
+
+    setup_logging()
+    web_app = _run(create_app())
+    typer.echo(f"Starting web dashboard on http://{host}:{port}")
+    web.run_app(web_app, host=host, port=port, print=None)
+
+
+# ---------------------------------------------------------------------------
 # Register sub-apps (lazy to avoid circular imports at module level)
 # ---------------------------------------------------------------------------
 

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Emails - Coldpipe{% endblock %}
+{% block content %}
+<div class="page-header d-print-none mb-3">
+  <div class="row align-items-center">
+    <div class="col">
+      <h2 class="page-title">Sent Emails</h2>
+      <div class="text-muted mt-1">{{ total }} email{{ 's' if total != 1 }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <form method="get" action="/emails" class="d-flex gap-2">
+      <select name="status" class="form-select" style="max-width: 200px;" onchange="this.form.submit()">
+        <option value="">All statuses</option>
+        {% for s in ['sent', 'delivered', 'replied', 'bounced', 'failed'] %}
+        <option value="{{ s }}"{% if status == s %} selected{% endif %}>{{ s|capitalize }}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-vcenter card-table">
+      <thead>
+        <tr>
+          <th>To</th>
+          <th>Subject</th>
+          <th>Status</th>
+          <th>Campaign</th>
+          <th>Step</th>
+          <th>Sent At</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in emails %}
+        <tr>
+          <td>{{ e.to_email }}</td>
+          <td>{{ e.subject }}</td>
+          <td>
+            {% if e.status == 'sent' or e.status == 'delivered' %}
+            <span class="badge bg-blue-lt">{{ e.status }}</span>
+            {% elif e.status == 'replied' %}
+            <span class="badge bg-green-lt">replied</span>
+            {% elif e.status == 'bounced' %}
+            <span class="badge bg-red-lt">bounced</span>
+            {% elif e.status == 'failed' %}
+            <span class="badge bg-orange-lt">failed</span>
+            {% else %}
+            <span class="badge bg-secondary-lt">{{ e.status }}</span>
+            {% endif %}
+          </td>
+          <td>{{ e.campaign_id or '-' }}</td>
+          <td>{{ e.step_number }}</td>
+          <td>{{ e.sent_at or '-' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-muted">No emails sent yet</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% include "_partials/pagination.html" %}
+{% endblock %}

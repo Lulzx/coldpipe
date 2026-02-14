@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Lead #{{ lead.id }} - Coldpipe{% endblock %}
+{% block content %}
+<div class="page-header d-print-none mb-3">
+  <div class="row align-items-center">
+    <div class="col">
+      <a href="/leads" class="text-muted mb-1 d-block">&#8592; Back to leads</a>
+      <h2 class="page-title">{{ lead.first_name }} {{ lead.last_name }}{% if not lead.first_name and not lead.last_name %}{{ lead.email }}{% endif %}</h2>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header">
+    <h3 class="card-title">Lead Details</h3>
+  </div>
+  <div class="card-body">
+    <div class="datagrid">
+      <div class="datagrid-item">
+        <div class="datagrid-title">Email</div>
+        <div class="datagrid-content">{{ lead.email }}</div>
+      </div>
+      <div class="datagrid-item">
+        <div class="datagrid-title">Status</div>
+        <div class="datagrid-content">
+          {% if lead.email_status == 'valid' %}
+          <span class="badge bg-green-lt">valid</span>
+          {% elif lead.email_status == 'invalid' %}
+          <span class="badge bg-red-lt">invalid</span>
+          {% else %}
+          <span class="badge bg-secondary-lt">{{ lead.email_status }}</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="datagrid-item">
+        <div class="datagrid-title">Company</div>
+        <div class="datagrid-content">{{ lead.company or '-' }}</div>
+      </div>
+      <div class="datagrid-item">
+        <div class="datagrid-title">Job Title</div>
+        <div class="datagrid-content">{{ lead.job_title or '-' }}</div>
+      </div>
+      <div class="datagrid-item">
+        <div class="datagrid-title">Website</div>
+        <div class="datagrid-content">
+          {% if lead.website %}<a href="{{ lead.website }}" target="_blank">{{ lead.website }}</a>{% else %}-{% endif %}
+        </div>
+      </div>
+      <div class="datagrid-item">
+        <div class="datagrid-title">Phone</div>
+        <div class="datagrid-content">{{ lead.phone or '-' }}</div>
+      </div>
+      <div class="datagrid-item">
+        <div class="datagrid-title">Location</div>
+        <div class="datagrid-content">{{ [lead.city, lead.state, lead.zip]|select|join(', ') or '-' }}</div>
+      </div>
+      <div class="datagrid-item">
+        <div class="datagrid-title">Address</div>
+        <div class="datagrid-content">{{ lead.address or '-' }}</div>
+      </div>
+      <div class="datagrid-item">
+        <div class="datagrid-title">Source</div>
+        <div class="datagrid-content">{{ lead.source or '-' }}</div>
+      </div>
+      <div class="datagrid-item">
+        <div class="datagrid-title">Source URL</div>
+        <div class="datagrid-content">
+          {% if lead.source_url %}<a href="{{ lead.source_url }}" target="_blank">{{ lead.source_url[:60] }}{% if lead.source_url|length > 60 %}...{% endif %}</a>{% else %}-{% endif %}
+        </div>
+      </div>
+      <div class="datagrid-item">
+        <div class="datagrid-title">Tags</div>
+        <div class="datagrid-content">{{ lead.tags or '-' }}</div>
+      </div>
+      <div class="datagrid-item">
+        <div class="datagrid-title">Notes</div>
+        <div class="datagrid-content">{{ lead.notes or '-' }}</div>
+      </div>
+      <div class="datagrid-item">
+        <div class="datagrid-title">Confidence</div>
+        <div class="datagrid-content">{{ "%.0f%%"|format(lead.email_confidence * 100) if lead.email_confidence else '-' }}</div>
+      </div>
+      <div class="datagrid-item">
+        <div class="datagrid-title">Email Source</div>
+        <div class="datagrid-content">{{ lead.email_source or '-' }}</div>
+      </div>
+      <div class="datagrid-item">
+        <div class="datagrid-title">Provider</div>
+        <div class="datagrid-content">{{ lead.email_provider or '-' }}</div>
+      </div>
+      <div class="datagrid-item">
+        <div class="datagrid-title">Created</div>
+        <div class="datagrid-content">{{ lead.created_at or '-' }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title">Sent Emails</h3>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-vcenter card-table">
+      <thead>
+        <tr>
+          <th>Subject</th>
+          <th>Status</th>
+          <th>From</th>
+          <th>Sent At</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in emails %}
+        <tr>
+          <td>{{ e.subject }}</td>
+          <td>
+            {% if e.status == 'sent' or e.status == 'delivered' %}
+            <span class="badge bg-blue-lt">{{ e.status }}</span>
+            {% elif e.status == 'replied' %}
+            <span class="badge bg-green-lt">replied</span>
+            {% elif e.status == 'bounced' %}
+            <span class="badge bg-red-lt">bounced</span>
+            {% else %}
+            <span class="badge bg-secondary-lt">{{ e.status }}</span>
+            {% endif %}
+          </td>
+          <td>{{ e.from_email }}</td>
+          <td>{{ e.sent_at or '-' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="text-muted">No emails sent to this lead</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -597,6 +597,39 @@ async def get_emails_for_lead(db: aiosqlite.Connection, lead_id: int) -> list[Em
     return [_row_to_struct(r, EmailSent, _ES_COLS) for r in rows]
 
 
+async def get_emails_sent(
+    db: aiosqlite.Connection,
+    *,
+    limit: int = 50,
+    offset: int = 0,
+    status: str | None = None,
+) -> list[EmailSent]:
+    """Fetch sent emails with optional status filter."""
+    q = "SELECT * FROM emails_sent WHERE 1=1"
+    params: list = []
+    if status:
+        q += " AND status = ?"
+        params.append(status)
+    q += " ORDER BY id DESC LIMIT ? OFFSET ?"
+    params.extend([limit, offset])
+    cursor = await db.execute(q, params)
+    rows = await cursor.fetchall()
+    return [_row_to_struct(r, EmailSent, _ES_COLS) for r in rows]
+
+
+async def count_emails_sent(db: aiosqlite.Connection, *, status: str | None = None) -> int:
+    """Count sent emails with optional status filter."""
+    q = "SELECT COUNT(*) FROM emails_sent"
+    params: list[str] = []
+    if status:
+        q += " WHERE status = ?"
+        params.append(status)
+    cursor = await db.execute(q, params)
+    row = await cursor.fetchone()
+    assert row is not None
+    return row[0]
+
+
 async def get_email_by_message_id(db: aiosqlite.Connection, message_id: str) -> EmailSent | None:
     cursor = await db.execute("SELECT * FROM emails_sent WHERE message_id = ?", (message_id,))
     row = await cursor.fetchone()

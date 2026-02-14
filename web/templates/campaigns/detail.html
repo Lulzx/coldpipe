@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}{{ campaign.name }} - Coldpipe{% endblock %}
+{% block content %}
+<div class="page-header d-print-none mb-3">
+  <div class="row align-items-center">
+    <div class="col">
+      <a href="/campaigns" class="text-muted mb-1 d-block">&#8592; Back to campaigns</a>
+      <h2 class="page-title">{{ campaign.name }}</h2>
+      <div class="text-muted mt-1">
+        {% if campaign.status == 'active' %}
+        <span class="badge bg-green-lt">active</span>
+        {% elif campaign.status == 'paused' %}
+        <span class="badge bg-yellow-lt">paused</span>
+        {% else %}
+        <span class="badge bg-secondary-lt">{{ campaign.status }}</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row row-deck row-cards mb-3">
+  <div class="col-sm-6 col-lg-3">
+    <div class="card">
+      <div class="card-body">
+        <div class="subheader">Enrolled</div>
+        <div class="h1 mb-0">{{ stats.get('total', 0) }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="card">
+      <div class="card-body">
+        <div class="subheader">Active</div>
+        <div class="h1 mb-0">{{ stats.get('active', 0) }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="card">
+      <div class="card-body">
+        <div class="subheader">Replied</div>
+        <div class="h1 mb-0 text-green">{{ stats.get('replied', 0) }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="card">
+      <div class="card-body">
+        <div class="subheader">Bounced</div>
+        <div class="h1 mb-0 text-red">{{ stats.get('bounced', 0) }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header">
+    <h3 class="card-title">Sequence Steps</h3>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-vcenter card-table">
+      <thead>
+        <tr>
+          <th>Step</th>
+          <th>Template</th>
+          <th>Subject</th>
+          <th>Delay (days)</th>
+          <th>Reply?</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in steps %}
+        <tr>
+          <td>{{ s.step_number }}</td>
+          <td>{{ s.template_name }}</td>
+          <td>{{ s.subject }}</td>
+          <td>{{ s.delay_days }}</td>
+          <td>{{ 'Yes' if s.is_reply else 'No' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="text-muted">No steps configured</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title">Enrolled Leads</h3>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-vcenter card-table">
+      <thead>
+        <tr>
+          <th>Lead ID</th>
+          <th>Step</th>
+          <th>Status</th>
+          <th>Enrolled</th>
+          <th>Last Sent</th>
+          <th>Next Send</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for cl in leads %}
+        <tr>
+          <td><a href="/leads/{{ cl.lead_id }}">{{ cl.lead_id }}</a></td>
+          <td>{{ cl.current_step }}</td>
+          <td>
+            {% if cl.status == 'active' %}
+            <span class="badge bg-green-lt">active</span>
+            {% elif cl.status == 'replied' %}
+            <span class="badge bg-blue-lt">replied</span>
+            {% elif cl.status == 'bounced' %}
+            <span class="badge bg-red-lt">bounced</span>
+            {% else %}
+            <span class="badge bg-secondary-lt">{{ cl.status }}</span>
+            {% endif %}
+          </td>
+          <td>{{ cl.enrolled_at[:10] if cl.enrolled_at else '-' }}</td>
+          <td>{{ cl.last_sent_at or '-' }}</td>
+          <td>{{ cl.next_send_at or '-' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-muted">No leads enrolled</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Coldpipe{% endblock %}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.4.0/dist/css/tabler.min.css">
+  <style>
+    .pipeline-col { min-width: 200px; }
+    .pipeline-card { cursor: default; }
+    .kanban-row { overflow-x: auto; flex-wrap: nowrap; }
+    .kanban-row > .col { flex: 0 0 220px; max-width: 260px; }
+  </style>
+</head>
+<body class="layout-fluid">
+  <div class="page">
+    {% include "_partials/nav.html" %}
+    <div class="page-wrapper">
+      <div class="page-body">
+        <div class="container-xl">
+          {% block content %}{% endblock %}
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.4.0/dist/js/tabler.min.js"></script>
+</body>
+</html>

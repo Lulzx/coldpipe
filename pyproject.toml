@@ -23,6 +23,7 @@ dependencies = [
     "structlog~=25.5",
     "exa-py~=2.4",
     "cryptography~=46.0",
+    "aiohttp-jinja2~=1.6",
 ]
 
 [project.scripts]
@@ -33,7 +34,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["cli", "db", "scrapers", "mailer", "tui", "config", "shared", "tools"]
+packages = ["cli", "db", "scrapers", "mailer", "tui", "config", "shared", "tools", "web"]
 
 [dependency-groups]
 dev = [

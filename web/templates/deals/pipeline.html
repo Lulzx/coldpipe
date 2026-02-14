@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Pipeline - Coldpipe{% endblock %}
+{% block content %}
+<div class="page-header d-print-none mb-3">
+  <div class="row align-items-center">
+    <div class="col">
+      <h2 class="page-title">Deal Pipeline</h2>
+      <div class="text-muted mt-1">
+        Pipeline: ${{ "%.0f"|format(stats.pipeline_value) }} |
+        Closed: ${{ "%.0f"|format(stats.closed_value) }}
+      </div>
+    </div>
+    <div class="col-auto">
+      <a href="/deals" class="btn btn-outline-primary">List View</a>
+    </div>
+  </div>
+</div>
+
+<div class="row kanban-row g-3 pb-3">
+  {% for stage in stages %}
+  <div class="col pipeline-col">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">
+          {{ stage|replace('_', ' ')|title }}
+          <span class="badge bg-secondary-lt ms-1">{{ by_stage[stage]|length }}</span>
+        </h3>
+      </div>
+      <div class="card-body p-2">
+        {% for d in by_stage[stage] %}
+        <div class="card card-sm mb-2 pipeline-card">
+          <div class="card-body p-2">
+            <div class="d-flex justify-content-between">
+              <a href="/leads/{{ d.lead_id }}" class="text-reset">Lead #{{ d.lead_id }}</a>
+              <span class="text-muted">${{ "%.0f"|format(d.value) }}</span>
+            </div>
+            {% if d.notes %}
+            <div class="text-muted small mt-1">{{ d.notes[:40] }}{% if d.notes|length > 40 %}...{% endif %}</div>
+            {% endif %}
+          </div>
+        </div>
+        {% else %}
+        <div class="text-muted small text-center py-3">No deals</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
