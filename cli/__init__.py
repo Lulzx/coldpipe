@@ -62,6 +62,90 @@ def db_backup(
     typer.echo(f"Backed up {src} → {dst}")
 
 
+@db_app.command("backup-auto")
+def db_backup_auto(
+    retain: int = typer.Option(7, help="Number of backups to retain"),
+    output_dir: str = typer.Option("data/backups", help="Backup output directory"),
+):
+    """Create timestamped backup with automatic retention."""
+    import shutil
+
+    from config.settings import DB_PATH
+
+    dst_dir = Path(output_dir)
+    dst_dir.mkdir(parents=True, exist_ok=True)
+    src = DB_PATH
+    if not src.exists():
+        typer.echo("No database found.", err=True)
+        raise typer.Exit(1)
+    from datetime import UTC, datetime
+
+    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+    dst = dst_dir / f"coldpipe_{timestamp}.db"
+    shutil.copy2(src, dst)
+    # Retention
+    backups = sorted(dst_dir.glob("coldpipe_*.db"))
+    removed = 0
+    for old in backups[:-retain]:
+        old.unlink(missing_ok=True)
+        removed += 1
+    typer.echo(f"Backup created: {dst}" + (f" (removed {removed} old)" if removed else ""))
+
+
+@db_app.command("health")
+def db_health():
+    """Run health checks on database and configuration."""
+    setup_logging()
+    checks_passed = True
+
+    async def _check():
+        nonlocal checks_passed
+        try:
+            async with get_db() as db:
+                cursor = await db.execute("PRAGMA integrity_check")
+                result = await cursor.fetchone()
+                if result and result[0] == "ok":
+                    typer.echo("[OK] Database integrity check passed")
+                else:
+                    typer.echo("[FAIL] Database integrity check failed", err=True)
+                    checks_passed = False
+
+                # Check schema version
+                from db.migrate import get_version
+
+                version = await get_version(db)
+                if version == 2:
+                    typer.echo(f"[OK] Schema version: {version}")
+                else:
+                    typer.echo(f"[WARN] Schema version: {version} (expected 2)", err=True)
+                    checks_passed = False
+        except Exception as e:
+            typer.echo(f"[FAIL] Database connection: {e}", err=True)
+            checks_passed = False
+
+        # Check config
+        try:
+            from config.settings import load_settings
+
+            settings = load_settings()
+            typer.echo("[OK] Configuration loaded")
+
+            # Check API key
+            if settings.anthropic_api_key:
+                typer.echo("[OK] Anthropic API key is set")
+            else:
+                typer.echo("[WARN] Anthropic API key is not set")
+        except Exception as e:
+            typer.echo(f"[FAIL] Configuration: {e}", err=True)
+            checks_passed = False
+
+        return checks_passed
+
+    result = _run(_check())
+    if not result:
+        raise typer.Exit(1)
+
+
 # ---------------------------------------------------------------------------
 # Register sub-apps (lazy to avoid circular imports at module level)
 # ---------------------------------------------------------------------------

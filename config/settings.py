@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import msgspec
 
@@ -60,6 +61,39 @@ class Settings(msgspec.Struct, kw_only=True):
     exa_api_key: str = ""
     log_level: str = "INFO"
     log_json: bool = False
+    log_file: str = ""
+
+    def validate(self) -> None:
+        """Validate settings ranges and constraints. Raises ValueError if invalid."""
+        errors: list[str] = []
+
+        if not 1 <= self.send.daily_limit <= 500:
+            errors.append(f"send.daily_limit must be 1..500, got {self.send.daily_limit}")
+
+        if self.send.min_delay_seconds >= self.send.max_delay_seconds:
+            errors.append(
+                f"send.min_delay_seconds ({self.send.min_delay_seconds}) "
+                f"must be < send.max_delay_seconds ({self.send.max_delay_seconds})"
+            )
+
+        try:
+            ZoneInfo(self.send.timezone)
+        except KeyError, ValueError:
+            errors.append(f"send.timezone is not a valid IANA zone: {self.send.timezone!r}")
+
+        if not 1 <= self.scraper.max_concurrent <= 500:
+            errors.append(
+                f"scraper.max_concurrent must be 1..500, got {self.scraper.max_concurrent}"
+            )
+
+        if not 1 <= self.scraper.timeout <= 60:
+            errors.append(f"scraper.timeout must be 1..60, got {self.scraper.timeout}")
+
+        if not 1 <= self.llm.max_concurrent <= 20:
+            errors.append(f"llm.max_concurrent must be 1..20, got {self.llm.max_concurrent}")
+
+        if errors:
+            raise ValueError("Settings validation failed:\n  " + "\n  ".join(errors))
 
 
 def load_settings() -> Settings:
@@ -79,10 +113,13 @@ def load_settings() -> Settings:
         "EXA_API_KEY": "exa_api_key",
         "DB_PATH": "db_path",
         "LOG_LEVEL": "log_level",
+        "LOG_FILE": "log_file",
     }
     for env_key, setting_key in env_map.items():
         val = os.environ.get(env_key)
         if val:
             data[setting_key] = val
 
-    return msgspec.convert(data, Settings)
+    settings = msgspec.convert(data, Settings)
+    settings.validate()
+    return settings

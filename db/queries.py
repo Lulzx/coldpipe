@@ -6,6 +6,8 @@ from datetime import UTC, datetime
 
 import aiosqlite
 
+from shared.crypto import decrypt, encrypt
+
 from .models import (
     Campaign,
     CampaignLead,
@@ -50,11 +52,11 @@ _LEAD_COLS = [
     "validated_at",
     "tags",
     "notes",
+    "created_at",
+    "updated_at",
     "email_confidence",
     "email_source",
     "email_provider",
-    "created_at",
-    "updated_at",
 ]
 
 
@@ -226,6 +228,8 @@ _MAILBOX_COLS = [
 
 
 async def upsert_mailbox(db: aiosqlite.Connection, mb: Mailbox) -> int:
+    smtp_pass = encrypt(mb.smtp_pass)
+    imap_pass = encrypt(mb.imap_pass)
     await db.execute(
         """INSERT INTO mailboxes (email, smtp_host, smtp_port, smtp_user, smtp_pass,
                                    imap_host, imap_port, imap_user, imap_pass,
@@ -244,11 +248,11 @@ async def upsert_mailbox(db: aiosqlite.Connection, mb: Mailbox) -> int:
             mb.smtp_host,
             mb.smtp_port,
             mb.smtp_user,
-            mb.smtp_pass,
+            smtp_pass,
             mb.imap_host,
             mb.imap_port,
             mb.imap_user,
-            mb.imap_pass,
+            imap_pass,
             mb.daily_limit,
             mb.warmup_day,
             mb.is_active,
@@ -269,7 +273,11 @@ async def get_mailboxes(db: aiosqlite.Connection, *, active_only: bool = False) 
     q += " ORDER BY id"
     cursor = await db.execute(q)
     rows = await cursor.fetchall()
-    return [_row_to_struct(r, Mailbox, _MAILBOX_COLS) for r in rows]
+    mailboxes = [_row_to_struct(r, Mailbox, _MAILBOX_COLS) for r in rows]
+    for m in mailboxes:
+        m.smtp_pass = decrypt(m.smtp_pass)
+        m.imap_pass = decrypt(m.imap_pass)
+    return mailboxes
 
 
 async def get_mailbox_by_id(db: aiosqlite.Connection, mailbox_id: int) -> Mailbox | None:
@@ -277,7 +285,30 @@ async def get_mailbox_by_id(db: aiosqlite.Connection, mailbox_id: int) -> Mailbo
     row = await cursor.fetchone()
     if row is None:
         return None
-    return _row_to_struct(row, Mailbox, _MAILBOX_COLS)
+    mb = _row_to_struct(row, Mailbox, _MAILBOX_COLS)
+    mb.smtp_pass = decrypt(mb.smtp_pass)
+    mb.imap_pass = decrypt(mb.imap_pass)
+    return mb
+
+
+async def encrypt_existing_passwords(db: aiosqlite.Connection) -> int:
+    """One-time migration: encrypt any plaintext mailbox passwords."""
+    cursor = await db.execute("SELECT id, smtp_pass, imap_pass FROM mailboxes")
+    rows = await cursor.fetchall()
+    count = 0
+    for row in rows:
+        mid, smtp_pass, imap_pass = row[0], row[1], row[2]
+        new_smtp = encrypt(smtp_pass)
+        new_imap = encrypt(imap_pass)
+        if new_smtp != smtp_pass or new_imap != imap_pass:
+            await db.execute(
+                "UPDATE mailboxes SET smtp_pass = ?, imap_pass = ? WHERE id = ?",
+                (new_smtp, new_imap, mid),
+            )
+            count += 1
+    if count:
+        await db.commit()
+    return count
 
 
 # ---------------------------------------------------------------------------

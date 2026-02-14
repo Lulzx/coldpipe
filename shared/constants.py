@@ -79,7 +79,8 @@ HDRS = {
 }
 
 TIMEOUT = 8
-MAX_CONN = 500
+MAX_CONN = 100
+DOMAIN_CONCURRENCY = 5
 
 PATHS = [
     "",

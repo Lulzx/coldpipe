@@ -1,0 +1,9 @@
+services:
+  coldpipe-daemon:
+    build: .
+    command: ["daemon", "start"]
+    volumes:
+      - ./data:/app/data
+      - ./coldpipe.toml:/app/coldpipe.toml:ro
+    env_file: .env
+    restart: unless-stopped

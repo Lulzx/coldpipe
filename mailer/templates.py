@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import FileSystemLoader
+from jinja2.sandbox import SandboxedEnvironment
 
 from config.settings import TEMPLATES_DIR
 
-_env = Environment(
+_env = SandboxedEnvironment(
     loader=FileSystemLoader(str(TEMPLATES_DIR)),
     autoescape=False,
     keep_trailing_newline=True,

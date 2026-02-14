@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
 import signal
+from datetime import UTC, datetime
 
 import typer
 from rich.console import Console
@@ -27,6 +27,7 @@ def start():
     - Check replies every 30 min
     - Check bounces every hour
     - Advance warmup day at midnight
+    - Database backup at 00:30
     """
     setup_logging()
     console.print("[bold]Starting daemon...[/bold]")
@@ -40,6 +41,8 @@ def start():
 
         async def send_job():
             """Send pending emails across all active campaigns."""
+            sent = 0
+            failed = 0
             try:
                 async with get_db() as db:
                     queue = await queries.get_all_send_queues(db, limit=50)
@@ -117,13 +120,22 @@ def start():
                                         to_email=item["email"],
                                         from_email=mb.email,
                                     )
+                                    sent += 1
                                 except Exception:
-                                    log.debug("send_job: per-email error", exc_info=True)
+                                    failed += 1
+                                    log.error(
+                                        "send_job: per-email error for %s",
+                                        item.get("email", "unknown"),
+                                        exc_info=True,
+                                    )
             except Exception:
-                log.debug("send_job error", exc_info=True)
+                log.error("send_job error", exc_info=True)
+            finally:
+                log.info("send_job complete: sent=%d failed=%d", sent, failed)
 
         async def reply_job():
             """Check for new replies across all mailboxes."""
+            checked = 0
             try:
                 async with get_db() as db:
                     mailboxes = await queries.get_mailboxes(db, active_only=True)
@@ -131,13 +143,23 @@ def start():
 
                     for mb in mailboxes:
                         if mb.imap_host and mb.imap_user:
-                            with contextlib.suppress(Exception):
+                            try:
                                 await check_replies(db, mb)
+                                checked += 1
+                            except Exception:
+                                log.error(
+                                    "reply_job: error checking mailbox %s",
+                                    mb.email,
+                                    exc_info=True,
+                                )
             except Exception:
-                log.debug("reply_job error", exc_info=True)
+                log.error("reply_job error", exc_info=True)
+            finally:
+                log.info("reply_job complete: checked=%d mailboxes", checked)
 
         async def bounce_job():
             """Check for bounced emails."""
+            checked = 0
             try:
                 async with get_db() as db:
                     mailboxes = await queries.get_mailboxes(db, active_only=True)
@@ -145,10 +167,19 @@ def start():
 
                     for mb in mailboxes:
                         if mb.imap_host and mb.imap_user:
-                            with contextlib.suppress(Exception):
+                            try:
                                 await check_bounces(db, mb)
+                                checked += 1
+                            except Exception:
+                                log.error(
+                                    "bounce_job: error checking mailbox %s",
+                                    mb.email,
+                                    exc_info=True,
+                                )
             except Exception:
-                log.debug("bounce_job error", exc_info=True)
+                log.error("bounce_job error", exc_info=True)
+            finally:
+                log.info("bounce_job complete: checked=%d mailboxes", checked)
 
         async def warmup_job():
             """Advance warmup day counter for all active mailboxes."""
@@ -158,47 +189,97 @@ def start():
                         "UPDATE mailboxes SET warmup_day = warmup_day + 1 WHERE is_active = 1"
                     )
                     await db.commit()
+                    log.info("warmup_job complete")
             except Exception:
-                log.debug("warmup_job error", exc_info=True)
+                log.error("warmup_job error", exc_info=True)
 
-        async with AsyncScheduler() as scheduler:
-            # Send emails every 15 min during business hours
-            await scheduler.add_schedule(
-                send_job,
-                IntervalTrigger(minutes=15),
-                id="send_emails",
-            )
-            # Check replies every 30 min
-            await scheduler.add_schedule(
-                reply_job,
-                IntervalTrigger(minutes=30),
-                id="check_replies",
-            )
-            # Check bounces every hour
-            await scheduler.add_schedule(
-                bounce_job,
-                IntervalTrigger(hours=1),
-                id="check_bounces",
-            )
-            # Advance warmup at midnight
-            await scheduler.add_schedule(
-                warmup_job,
-                CronTrigger(hour=0, minute=0),
-                id="advance_warmup",
-            )
+        async def backup_job():
+            """Create timestamped database backup with retention."""
+            import shutil
 
-            console.print("[green]Daemon running. Press Ctrl+C to stop.[/green]")
-            console.print("  - Send emails: every 15 min")
-            console.print("  - Check replies: every 30 min")
-            console.print("  - Check bounces: every hour")
-            console.print("  - Advance warmup: midnight")
+            from config.settings import DATA_DIR
 
-            stop = asyncio.Event()
-            loop = asyncio.get_event_loop()
-            for sig in (signal.SIGINT, signal.SIGTERM):
-                loop.add_signal_handler(sig, stop.set)
+            backup_dir = DATA_DIR / "backups"
+            backup_dir.mkdir(exist_ok=True)
+            timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+            backup_path = backup_dir / f"coldpipe_{timestamp}.db"
+            src = DATA_DIR / "coldpipe.db"
+            if not src.exists():
+                return
+            shutil.copy2(src, backup_path)
+            # Verify backup
+            import aiosqlite
 
-            await stop.wait()
-            console.print("\n[yellow]Daemon stopped.[/yellow]")
+            async with aiosqlite.connect(str(backup_path)) as bdb:
+                cursor = await bdb.execute("PRAGMA integrity_check")
+                result = await cursor.fetchone()
+                if result and result[0] != "ok":
+                    log.error("backup_integrity_failed", path=str(backup_path))
+                    backup_path.unlink(missing_ok=True)
+                    return
+            # Retention: keep last 7
+            backups = sorted(backup_dir.glob("coldpipe_*.db"))
+            for old in backups[:-7]:
+                old.unlink(missing_ok=True)
+            log.info("backup_complete", path=str(backup_path))
+
+        stop = asyncio.Event()
+        loop = asyncio.get_event_loop()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(sig, stop.set)
+
+        scheduler = AsyncScheduler()
+        await scheduler.__aenter__()
+
+        # Send emails every 15 min during business hours
+        await scheduler.add_schedule(
+            send_job,
+            IntervalTrigger(minutes=15),
+            id="send_emails",
+        )
+        # Check replies every 30 min
+        await scheduler.add_schedule(
+            reply_job,
+            IntervalTrigger(minutes=30),
+            id="check_replies",
+        )
+        # Check bounces every hour
+        await scheduler.add_schedule(
+            bounce_job,
+            IntervalTrigger(hours=1),
+            id="check_bounces",
+        )
+        # Advance warmup at midnight
+        await scheduler.add_schedule(
+            warmup_job,
+            CronTrigger(hour=0, minute=0),
+            id="advance_warmup",
+        )
+        # Database backup at 00:30
+        await scheduler.add_schedule(
+            backup_job,
+            CronTrigger(hour=0, minute=30),
+            id="backup",
+        )
+
+        console.print("[green]Daemon running. Press Ctrl+C to stop.[/green]")
+        console.print("  - Send emails: every 15 min")
+        console.print("  - Check replies: every 30 min")
+        console.print("  - Check bounces: every hour")
+        console.print("  - Advance warmup: midnight")
+        console.print("  - Database backup: 00:30")
+
+        await stop.wait()
+        log.info("Shutdown signal received")
+        console.print("\n[yellow]Shutting down...[/yellow]")
+
+        # Graceful shutdown with 30s timeout
+        try:
+            await asyncio.wait_for(scheduler.__aexit__(None, None, None), timeout=30)
+        except TimeoutError:
+            log.warning("Scheduler shutdown timed out after 30s, forcing exit")
+
+        log.info("Daemon shutdown complete")
+        console.print("[yellow]Daemon shutdown complete.[/yellow]")
 
     asyncio.run(_run_daemon())

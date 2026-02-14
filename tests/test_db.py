@@ -611,3 +611,29 @@ async def test_warmup_limit():
     assert queries.get_warmup_limit(21) == 30
     assert queries.get_warmup_limit(30) == 48
     assert queries.get_warmup_limit(50) == 50
+
+
+# ---------------------------------------------------------------------------
+# Migration tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_migrate_idempotent(db):
+    """Running migrate twice should not error."""
+    from db.migrate import migrate
+
+    v1 = await migrate(db)
+    v2 = await migrate(db)
+    assert v1 == v2 == 2
+
+
+@pytest.mark.asyncio
+async def test_v2_columns_exist(db):
+    """v2 migration columns should exist with correct defaults."""
+    lid = await queries.upsert_lead(db, Lead(email="v2test@test.com"))
+    lead = await queries.get_lead_by_id(db, lid)
+    assert lead is not None
+    assert lead.email_confidence == 0.0
+    assert lead.email_source == ""
+    assert lead.email_provider == ""
