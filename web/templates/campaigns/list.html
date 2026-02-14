@@ -58,7 +58,17 @@
           <td>{{ c.created_at[:10] if c.created_at else '-' }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="5" class="text-muted">No campaigns found</td></tr>
+        <tr>
+          <td colspan="5">
+            <div class="empty py-4">
+              <div class="empty-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-lg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3 8l4 -16l3 8h4"/></svg>
+              </div>
+              <p class="empty-title">No campaigns found</p>
+              <p class="empty-subtitle text-muted">Create a campaign via CLI to get started.</p>
+            </div>
+          </td>
+        </tr>
         {% endfor %}
       </tbody>
     </table>

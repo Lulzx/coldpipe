@@ -10,8 +10,46 @@
         Closed: ${{ "%.0f"|format(stats.closed_value) }}
       </div>
     </div>
-    <div class="col-auto">
+    <div class="col-auto d-flex gap-2">
+      <button class="btn btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#createDealForm">New Deal</button>
       <a href="/deals/pipeline" class="btn btn-outline-primary">Pipeline View</a>
+    </div>
+  </div>
+</div>
+
+<div class="collapse mb-3" id="createDealForm">
+  <div class="card">
+    <div class="card-header">
+      <h3 class="card-title">Create Deal</h3>
+    </div>
+    <div class="card-body">
+      <form method="post" action="/deals/create">
+        <div class="row g-3">
+          <div class="col-md-3">
+            <label class="form-label">Lead ID</label>
+            <input type="number" name="lead_id" class="form-control" required min="1">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Stage</label>
+            <select name="stage" class="form-select">
+              {% for s in stages %}
+              <option value="{{ s }}">{{ s|replace('_', ' ')|title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Value ($)</label>
+            <input type="number" name="value" class="form-control" step="0.01" value="0">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Notes</label>
+            <input type="text" name="notes" class="form-control" placeholder="Optional notes...">
+          </div>
+        </div>
+        <div class="mt-3">
+          <button type="submit" class="btn btn-primary">Create Deal</button>
+        </div>
+      </form>
     </div>
   </div>
 </div>
@@ -21,7 +59,7 @@
     <form method="get" action="/deals" class="d-flex gap-2">
       <select name="stage" class="form-select" style="max-width: 200px;" onchange="this.form.submit()">
         <option value="">All stages</option>
-        {% for s in ['lead', 'contacted', 'replied', 'interested', 'meeting_booked', 'proposal_sent', 'closed_won', 'closed_lost'] %}
+        {% for s in stages %}
         <option value="{{ s }}"{% if stage == s %} selected{% endif %}>{{ s|replace('_', ' ')|title }}</option>
         {% endfor %}
       </select>
@@ -40,6 +78,7 @@
           <th>Value</th>
           <th>Notes</th>
           <th>Created</th>
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -61,9 +100,34 @@
           <td>${{ "%.0f"|format(d.value) }}</td>
           <td>{{ d.notes[:50] }}{% if d.notes|length > 50 %}...{% endif %}</td>
           <td>{{ d.created_at[:10] if d.created_at else '-' }}</td>
+          <td>
+            <div class="dropdown">
+              <button class="btn btn-sm dropdown-toggle" data-bs-toggle="dropdown">Move</button>
+              <div class="dropdown-menu">
+                {% for s in stages %}
+                {% if s != d.stage %}
+                <form method="post" action="/deals/{{ d.id }}/move" class="d-inline">
+                  <input type="hidden" name="stage" value="{{ s }}">
+                  <button type="submit" class="dropdown-item">{{ s|replace('_', ' ')|title }}</button>
+                </form>
+                {% endif %}
+                {% endfor %}
+              </div>
+            </div>
+          </td>
         </tr>
         {% else %}
-        <tr><td colspan="6" class="text-muted">No deals found</td></tr>
+        <tr>
+          <td colspan="7">
+            <div class="empty py-4">
+              <div class="empty-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-lg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"/><path d="M14.8 9a2 2 0 0 0 -1.8 -1h-2a2 2 0 1 0 0 4h2a2 2 0 1 1 0 4h-2a2 2 0 0 1 -1.8 -1"/><path d="M12 7v10"/></svg>
+              </div>
+              <p class="empty-title">No deals found</p>
+              <p class="empty-subtitle text-muted">Create a deal to start tracking your pipeline.</p>
+            </div>
+          </td>
+        </tr>
         {% endfor %}
       </tbody>
     </table>

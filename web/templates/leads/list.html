@@ -7,6 +7,12 @@
       <h2 class="page-title">Leads</h2>
       <div class="text-muted mt-1">{{ total }} lead{{ 's' if total != 1 }}</div>
     </div>
+    <div class="col-auto">
+      <a href="/leads/export" class="btn btn-outline-primary">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-download" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2"/><polyline points="7 11 12 16 17 11"/><line x1="12" y1="4" x2="12" y2="16"/></svg>
+        Export CSV
+      </a>
+    </div>
   </div>
 </div>
 
@@ -39,9 +45,8 @@
     <table class="table table-vcenter card-table">
       <thead>
         <tr>
-          <th>ID</th>
-          <th>Email</th>
           <th>Name</th>
+          <th>Email</th>
           <th>Company</th>
           <th>Status</th>
           <th>Source</th>
@@ -51,9 +56,14 @@
       <tbody>
         {% for lead in leads %}
         <tr>
-          <td>{{ lead.id }}</td>
-          <td><a href="/leads/{{ lead.id }}">{{ lead.email }}</a></td>
-          <td>{{ lead.first_name }} {{ lead.last_name }}</td>
+          <td>
+            <div class="d-flex align-items-center">
+              {% set initials = (lead.first_name[:1] ~ lead.last_name[:1])|upper if lead.first_name or lead.last_name else lead.email[:2]|upper %}
+              <span class="avatar avatar-sm bg-blue-lt me-2">{{ initials }}</span>
+              <a href="/leads/{{ lead.id }}">{{ lead.first_name }} {{ lead.last_name }}{% if not lead.first_name and not lead.last_name %}{{ lead.email }}{% endif %}</a>
+            </div>
+          </td>
+          <td>{{ lead.email }}</td>
           <td>{{ lead.company }}</td>
           <td>
             {% if lead.email_status == 'valid' %}
@@ -72,7 +82,17 @@
           <td>{{ lead.created_at[:10] if lead.created_at else '-' }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="7" class="text-muted">No leads found</td></tr>
+        <tr>
+          <td colspan="6">
+            <div class="empty py-4">
+              <div class="empty-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-lg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0"/><path d="M3 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0 -3 -3.85"/></svg>
+              </div>
+              <p class="empty-title">No leads found</p>
+              <p class="empty-subtitle text-muted">Import leads via CLI or scraper to get started.</p>
+            </div>
+          </td>
+        </tr>
         {% endfor %}
       </tbody>
     </table>

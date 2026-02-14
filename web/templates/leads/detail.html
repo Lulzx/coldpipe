@@ -3,6 +3,10 @@
 {% block content %}
 <div class="page-header d-print-none mb-3">
   <div class="row align-items-center">
+    <div class="col-auto">
+      {% set initials = (lead.first_name[:1] ~ lead.last_name[:1])|upper if lead.first_name or lead.last_name else lead.email[:2]|upper %}
+      <span class="avatar avatar-lg bg-blue-lt">{{ initials }}</span>
+    </div>
     <div class="col">
       <a href="/leads" class="text-muted mb-1 d-block">&#8592; Back to leads</a>
       <h2 class="page-title">{{ lead.first_name }} {{ lead.last_name }}{% if not lead.first_name and not lead.last_name %}{{ lead.email }}{% endif %}</h2>
@@ -98,23 +102,18 @@
 
 <div class="card">
   <div class="card-header">
-    <h3 class="card-title">Sent Emails</h3>
+    <h3 class="card-title">Email History</h3>
   </div>
-  <div class="table-responsive">
-    <table class="table table-vcenter card-table">
-      <thead>
-        <tr>
-          <th>Subject</th>
-          <th>Status</th>
-          <th>From</th>
-          <th>Sent At</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for e in emails %}
-        <tr>
-          <td>{{ e.subject }}</td>
-          <td>
+  <div class="card-body">
+    {% if emails %}
+    <ul class="list-timeline">
+      {% for e in emails %}
+      <li class="list-timeline-item">
+        <div class="list-timeline-icon{% if e.status == 'replied' %} bg-green{% elif e.status == 'bounced' %} bg-red{% elif e.status == 'failed' %} bg-orange{% else %} bg-blue{% endif %}"></div>
+        <div class="list-timeline-content">
+          <div class="list-timeline-time">{{ e.sent_at or '-' }}</div>
+          <p class="list-timeline-title">{{ e.subject }}</p>
+          <p class="text-muted">
             {% if e.status == 'sent' or e.status == 'delivered' %}
             <span class="badge bg-blue-lt">{{ e.status }}</span>
             {% elif e.status == 'replied' %}
@@ -124,15 +123,21 @@
             {% else %}
             <span class="badge bg-secondary-lt">{{ e.status }}</span>
             {% endif %}
-          </td>
-          <td>{{ e.from_email }}</td>
-          <td>{{ e.sent_at or '-' }}</td>
-        </tr>
-        {% else %}
-        <tr><td colspan="4" class="text-muted">No emails sent to this lead</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+            &middot; From: {{ e.from_email }}{% if e.step_number %} &middot; Step {{ e.step_number }}{% endif %}
+          </p>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty py-4">
+      <div class="empty-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-lg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z"/><path d="M3 7l9 6l9 -6"/></svg>
+      </div>
+      <p class="empty-title">No emails sent to this lead</p>
+      <p class="empty-subtitle text-muted">Enroll this lead in a campaign to start sending emails.</p>
+    </div>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

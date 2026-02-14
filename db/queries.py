@@ -947,6 +947,36 @@ async def get_today_activity(db: aiosqlite.Connection) -> dict:
     return {"sent": row[0] or 0, "replies": row[1] or 0, "bounces": row[2] or 0}
 
 
+async def get_email_status_distribution(db: aiosqlite.Connection) -> dict[str, int]:
+    """Get count of emails by status."""
+    cursor = await db.execute(
+        "SELECT status, COUNT(*) FROM emails_sent GROUP BY status"
+    )
+    rows = await cursor.fetchall()
+    return {row[0]: row[1] for row in rows}
+
+
+async def get_campaign_step_distribution(
+    db: aiosqlite.Connection, campaign_id: int
+) -> dict[int, dict[str, int]]:
+    """Get lead counts by step and status for a campaign."""
+    cursor = await db.execute(
+        """SELECT current_step, status, COUNT(*)
+           FROM campaign_leads
+           WHERE campaign_id = ?
+           GROUP BY current_step, status""",
+        (campaign_id,),
+    )
+    rows = await cursor.fetchall()
+    result: dict[int, dict[str, int]] = {}
+    for row in rows:
+        step, status, cnt = row[0], row[1], row[2]
+        if step not in result:
+            result[step] = {}
+        result[step][status] = cnt
+    return result
+
+
 async def get_campaign_stats(db: aiosqlite.Connection, campaign_id: int) -> dict:
     """Get stats for a specific campaign."""
     cursor = await db.execute(

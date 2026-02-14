@@ -10,6 +10,27 @@
   </div>
 </div>
 
+{% if email_dist %}
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="row align-items-center">
+      <div class="col-md-4">
+        <div id="chart-email-status" style="height: 200px;"></div>
+      </div>
+      <div class="col-md-8">
+        <div class="row g-2">
+          {% for st, cnt in email_dist.items() %}
+          <div class="col-auto">
+            <span class="badge {% if st == 'sent' or st == 'delivered' %}bg-blue-lt{% elif st == 'replied' %}bg-green-lt{% elif st == 'bounced' %}bg-red-lt{% elif st == 'failed' %}bg-orange-lt{% else %}bg-secondary-lt{% endif %} fs-6">{{ st }}: {{ cnt }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <div class="card mb-3">
   <div class="card-body">
     <form method="get" action="/emails" class="d-flex gap-2">
@@ -59,7 +80,17 @@
           <td>{{ e.sent_at or '-' }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="6" class="text-muted">No emails sent yet</td></tr>
+        <tr>
+          <td colspan="6">
+            <div class="empty py-4">
+              <div class="empty-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-lg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z"/><path d="M3 7l9 6l9 -6"/></svg>
+              </div>
+              <p class="empty-title">No emails sent yet</p>
+              <p class="empty-subtitle text-muted">Start a campaign to begin sending emails.</p>
+            </div>
+          </td>
+        </tr>
         {% endfor %}
       </tbody>
     </table>
@@ -67,4 +98,29 @@
 </div>
 
 {% include "_partials/pagination.html" %}
+{% endblock %}
+
+{% block scripts %}
+{% if email_dist %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var dist = {{ email_dist|tojson }};
+  var labels = Object.keys(dist);
+  var values = Object.values(dist);
+  var colorMap = { sent: '#206bc4', delivered: '#206bc4', replied: '#2fb344',
+                   bounced: '#d63939', failed: '#f76707' };
+  var colors = labels.map(function(l) { return colorMap[l] || '#6c757d'; });
+
+  new ApexCharts(document.querySelector('#chart-email-status'), {
+    chart: { type: 'donut', height: 200, fontFamily: 'inherit' },
+    series: values,
+    labels: labels,
+    colors: colors,
+    legend: { position: 'bottom', fontSize: '12px' },
+    plotOptions: { pie: { donut: { size: '55%' } } },
+    dataLabels: { enabled: false }
+  }).render();
+});
+</script>
+{% endif %}
 {% endblock %}

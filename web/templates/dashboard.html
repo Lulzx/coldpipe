@@ -13,6 +13,11 @@
   <div class="col-sm-6 col-lg-3">
     <div class="card">
       <div class="card-body">
+        <div class="card-stamp">
+          <div class="card-stamp-icon bg-blue">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0"/><path d="M3 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0 -3 -3.85"/></svg>
+          </div>
+        </div>
         <div class="d-flex align-items-center">
           <div class="subheader">Total Leads</div>
         </div>
@@ -29,6 +34,11 @@
   <div class="col-sm-6 col-lg-3">
     <div class="card">
       <div class="card-body">
+        <div class="card-stamp">
+          <div class="card-stamp-icon bg-green">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z"/><path d="M3 7l9 6l9 -6"/></svg>
+          </div>
+        </div>
         <div class="d-flex align-items-center">
           <div class="subheader">Sent Today</div>
         </div>
@@ -42,6 +52,11 @@
   <div class="col-sm-6 col-lg-3">
     <div class="card">
       <div class="card-body">
+        <div class="card-stamp">
+          <div class="card-stamp-icon bg-yellow">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"/><path d="M14.8 9a2 2 0 0 0 -1.8 -1h-2a2 2 0 1 0 0 4h2a2 2 0 1 1 0 4h-2a2 2 0 0 1 -1.8 -1"/><path d="M12 7v10"/></svg>
+          </div>
+        </div>
         <div class="d-flex align-items-center">
           <div class="subheader">Pipeline Value</div>
         </div>
@@ -55,6 +70,11 @@
   <div class="col-sm-6 col-lg-3">
     <div class="card">
       <div class="card-body">
+        <div class="card-stamp">
+          <div class="card-stamp-icon bg-purple">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3 8l4 -16l3 8h4"/></svg>
+          </div>
+        </div>
         <div class="d-flex align-items-center">
           <div class="subheader">Deal Stages</div>
         </div>
@@ -62,6 +82,42 @@
         <div class="d-flex mt-1">
           <span class="text-muted">{{ pipeline.values()|sum }} total deals</span>
         </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row row-deck row-cards mt-3">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">30-Day Send Trend</h3>
+      </div>
+      <div class="card-body">
+        <div id="chart-send-trend" style="height: 280px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row row-deck row-cards mt-3">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Leads by Status</h3>
+      </div>
+      <div class="card-body">
+        <div id="chart-lead-status" style="height: 260px;"></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Deal Pipeline</h3>
+      </div>
+      <div class="card-body">
+        <div id="chart-deal-pipeline" style="height: 260px;"></div>
       </div>
     </div>
   </div>
@@ -90,7 +146,14 @@
               <td>{{ c.created_at[:10] if c.created_at else '-' }}</td>
             </tr>
             {% else %}
-            <tr><td colspan="3" class="text-muted">No active campaigns</td></tr>
+            <tr>
+              <td colspan="3">
+                <div class="empty py-3">
+                  <p class="empty-title">No active campaigns</p>
+                  <p class="empty-subtitle text-muted">Create a campaign via CLI to get started.</p>
+                </div>
+              </td>
+            </tr>
             {% endfor %}
           </tbody>
         </table>
@@ -100,36 +163,41 @@
   <div class="col-lg-6">
     <div class="card">
       <div class="card-header">
-        <h3 class="card-title">7-Day Send Trend</h3>
+        <h3 class="card-title">Mailbox Warmup</h3>
       </div>
       <div class="table-responsive">
         <table class="table table-vcenter card-table">
           <thead>
             <tr>
+              <th>Mailbox</th>
               <th>Day</th>
-              <th>Status</th>
-              <th>Count</th>
+              <th>Progress</th>
             </tr>
           </thead>
           <tbody>
-            {% for row in daily %}
+            {% for mb in mailbox_warmup %}
+            {% set pct = (mb.sent_today / mb.warmup_limit * 100) if mb.warmup_limit > 0 else 0 %}
             <tr>
-              <td>{{ row.day }}</td>
+              <td>{{ mb.email }}</td>
+              <td>Day {{ mb.warmup_day }}</td>
               <td>
-                {% if row.status == 'sent' %}
-                <span class="badge bg-blue-lt">{{ row.status }}</span>
-                {% elif row.status == 'replied' %}
-                <span class="badge bg-green-lt">{{ row.status }}</span>
-                {% elif row.status == 'bounced' %}
-                <span class="badge bg-red-lt">{{ row.status }}</span>
-                {% else %}
-                <span class="badge bg-secondary-lt">{{ row.status }}</span>
-                {% endif %}
+                <div class="d-flex align-items-center gap-2">
+                  <div class="progress flex-grow-1" style="height: 6px; min-width: 80px;">
+                    <div class="progress-bar{% if pct > 90 %} bg-red{% elif pct > 70 %} bg-yellow{% else %} bg-green{% endif %}" style="width: {{ [pct, 100]|min }}%"></div>
+                  </div>
+                  <span class="text-muted small">{{ mb.sent_today }}/{{ mb.warmup_limit }}</span>
+                </div>
               </td>
-              <td>{{ row.cnt }}</td>
             </tr>
             {% else %}
-            <tr><td colspan="3" class="text-muted">No send data yet</td></tr>
+            <tr>
+              <td colspan="3">
+                <div class="empty py-3">
+                  <p class="empty-title">No active mailboxes</p>
+                  <p class="empty-subtitle text-muted">Add a mailbox to start warming up.</p>
+                </div>
+              </td>
+            </tr>
             {% endfor %}
           </tbody>
         </table>
@@ -137,4 +205,82 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // 30-day send trend area chart
+  var days = {{ chart_series.days|tojson }};
+  var sentData = {{ chart_series.sent|tojson }};
+  var repliedData = {{ chart_series.replied|tojson }};
+  var bouncedData = {{ chart_series.bounced|tojson }};
+
+  if (days.length > 0) {
+    new ApexCharts(document.querySelector('#chart-send-trend'), {
+      chart: { type: 'area', height: 280, fontFamily: 'inherit',
+        toolbar: { show: false }, animations: { enabled: true } },
+      series: [
+        { name: 'Sent', data: sentData },
+        { name: 'Replied', data: repliedData },
+        { name: 'Bounced', data: bouncedData }
+      ],
+      colors: ['#206bc4', '#2fb344', '#d63939'],
+      fill: { type: 'gradient', gradient: { opacityFrom: 0.4, opacityTo: 0.05 } },
+      stroke: { curve: 'smooth', width: 2 },
+      xaxis: { categories: days, labels: { rotate: -45 } },
+      yaxis: { min: 0 },
+      dataLabels: { enabled: false },
+      legend: { position: 'top' },
+      grid: { strokeDashArray: 4 },
+      tooltip: { shared: true }
+    }).render();
+  } else {
+    document.querySelector('#chart-send-trend').innerHTML =
+      '<div class="empty py-4"><p class="empty-title">No send data yet</p></div>';
+  }
+
+  // Lead status donut
+  var leadStatus = {{ lead_stats.by_status|tojson }};
+  var statusLabels = Object.keys(leadStatus);
+  var statusValues = Object.values(leadStatus);
+
+  if (statusLabels.length > 0) {
+    new ApexCharts(document.querySelector('#chart-lead-status'), {
+      chart: { type: 'donut', height: 260, fontFamily: 'inherit' },
+      series: statusValues,
+      labels: statusLabels,
+      colors: ['#206bc4', '#2fb344', '#d63939', '#f59f00', '#ae3ec9', '#6c757d'],
+      legend: { position: 'bottom' },
+      plotOptions: { pie: { donut: { size: '55%' } } },
+      dataLabels: { enabled: true, formatter: function(val) { return Math.round(val) + '%'; } }
+    }).render();
+  } else {
+    document.querySelector('#chart-lead-status').innerHTML =
+      '<div class="empty py-4"><p class="empty-title">No leads yet</p></div>';
+  }
+
+  // Deal pipeline horizontal bar chart
+  var pipeline = {{ pipeline|tojson }};
+  var pipelineLabels = Object.keys(pipeline).map(function(s) {
+    return s.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+  });
+  var pipelineValues = Object.values(pipeline);
+
+  if (pipelineLabels.length > 0) {
+    new ApexCharts(document.querySelector('#chart-deal-pipeline'), {
+      chart: { type: 'bar', height: 260, fontFamily: 'inherit', toolbar: { show: false } },
+      series: [{ name: 'Deals', data: pipelineValues }],
+      plotOptions: { bar: { horizontal: true, borderRadius: 4 } },
+      xaxis: { categories: pipelineLabels },
+      colors: ['#206bc4'],
+      dataLabels: { enabled: true },
+      grid: { strokeDashArray: 4 }
+    }).render();
+  } else {
+    document.querySelector('#chart-deal-pipeline').innerHTML =
+      '<div class="empty py-4"><p class="empty-title">No deals yet</p></div>';
+  }
+});
+</script>
 {% endblock %}

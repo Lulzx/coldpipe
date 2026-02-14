@@ -16,6 +16,20 @@
         {% endif %}
       </div>
     </div>
+    <div class="col-auto d-flex gap-2">
+      {% if campaign.status == 'active' %}
+      <form method="post" action="/campaigns/{{ campaign.id }}/pause">
+        <button type="submit" class="btn btn-warning">Pause</button>
+      </form>
+      {% elif campaign.status == 'paused' or campaign.status == 'draft' %}
+      <form method="post" action="/campaigns/{{ campaign.id }}/resume">
+        <button type="submit" class="btn btn-success">Resume</button>
+      </form>
+      {% endif %}
+      <form method="post" action="/campaigns/{{ campaign.id }}/delete" onsubmit="return confirm('Delete this campaign? This cannot be undone.')">
+        <button type="submit" class="btn btn-outline-danger">Delete</button>
+      </form>
+    </div>
   </div>
 </div>
 
@@ -54,6 +68,21 @@
   </div>
 </div>
 
+{% if steps %}
+<div class="card mb-3">
+  <div class="card-header">
+    <h3 class="card-title">Sequence Flow</h3>
+  </div>
+  <div class="card-body">
+    <ul class="steps steps-counter steps-blue">
+      {% for s in steps %}
+      <li class="step-item">{{ s.template_name }}{% if s.delay_days %} ({{ s.delay_days }}d){% endif %}</li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+{% endif %}
+
 <div class="card mb-3">
   <div class="card-header">
     <h3 class="card-title">Sequence Steps</h3>
@@ -79,12 +108,30 @@
           <td>{{ 'Yes' if s.is_reply else 'No' }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="5" class="text-muted">No steps configured</td></tr>
+        <tr>
+          <td colspan="5">
+            <div class="empty py-3">
+              <p class="empty-title">No steps configured</p>
+              <p class="empty-subtitle text-muted">Add sequence steps via CLI.</p>
+            </div>
+          </td>
+        </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
+
+{% if step_dist %}
+<div class="card mb-3">
+  <div class="card-header">
+    <h3 class="card-title">Lead Distribution by Step</h3>
+  </div>
+  <div class="card-body">
+    <div id="chart-step-dist" style="height: 260px;"></div>
+  </div>
+</div>
+{% endif %}
 
 <div class="card">
   <div class="card-header">
@@ -123,10 +170,54 @@
           <td>{{ cl.next_send_at or '-' }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="6" class="text-muted">No leads enrolled</td></tr>
+        <tr>
+          <td colspan="6">
+            <div class="empty py-3">
+              <p class="empty-title">No leads enrolled</p>
+              <p class="empty-subtitle text-muted">Enroll leads via CLI to start sending.</p>
+            </div>
+          </td>
+        </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{% if step_dist %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var stepDist = {{ step_dist|tojson }};
+  var stepNums = Object.keys(stepDist).map(Number).sort(function(a, b) { return a - b; });
+  var categories = stepNums.map(function(s) { return 'Step ' + s; });
+
+  var statuses = ['active', 'replied', 'bounced', 'completed', 'paused', 'unsubscribed'];
+  var colorMap = { active: '#2fb344', replied: '#206bc4', bounced: '#d63939',
+                   completed: '#6c757d', paused: '#f59f00', unsubscribed: '#ae3ec9' };
+  var series = [];
+  statuses.forEach(function(st) {
+    var data = stepNums.map(function(s) { return (stepDist[s] || {})[st] || 0; });
+    if (data.some(function(v) { return v > 0; })) {
+      series.push({ name: st, data: data });
+    }
+  });
+
+  if (series.length > 0) {
+    new ApexCharts(document.querySelector('#chart-step-dist'), {
+      chart: { type: 'bar', height: 260, stacked: true, fontFamily: 'inherit',
+        toolbar: { show: false } },
+      series: series,
+      colors: series.map(function(s) { return colorMap[s.name] || '#6c757d'; }),
+      xaxis: { categories: categories },
+      plotOptions: { bar: { horizontal: false, borderRadius: 4 } },
+      legend: { position: 'top' },
+      grid: { strokeDashArray: 4 },
+      dataLabels: { enabled: false }
+    }).render();
+  }
+});
+</script>
+{% endif %}
 {% endblock %}
