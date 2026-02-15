@@ -53,7 +53,7 @@ class ScraperSettings(msgspec.Struct, kw_only=True, frozen=True):
 class WebSettings(msgspec.Struct, kw_only=True, frozen=True):
     rp_id: str = "localhost"
     rp_name: str = "Coldpipe"
-    host: str = "127.0.0.1"
+    host: str = "localhost"
     port: int = 8080
 
 
