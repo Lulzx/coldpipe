@@ -7,9 +7,9 @@ import email
 import logging
 import re
 from email.message import Message
+from typing import Any
 
 import aioimaplib
-import aiosqlite
 
 from db import queries
 
@@ -141,7 +141,7 @@ def _get_text_body(msg: Message) -> str:
 
 
 async def process_bounce(
-    db: aiosqlite.Connection,
+    db: Any,
     dsn: dict,
 ) -> None:
     """Process a parsed DSN bounce.
@@ -172,38 +172,43 @@ async def process_bounce(
 
 
 async def _handle_hard_bounce(
-    db: aiosqlite.Connection,
+    db,
     email_sent_id: int,
     lead_id: int,
 ) -> None:
     """Hard bounce: invalidate lead email, cancel all campaigns for that lead."""
+    from db.tables import CampaignLead, Lead
+
     # Mark the sent email as bounced
     await queries.update_email_status(db, email_sent_id, "bounced")
 
     # Mark lead email as invalid
-    await db.execute("UPDATE leads SET email_status = 'invalid' WHERE id = ?", (lead_id,))
+    await Lead.update({Lead.email_status: "invalid"}).where(Lead.id == lead_id).run()
 
     # Cancel all campaign_leads for this lead
-    await db.execute("UPDATE campaign_leads SET status = 'bounced' WHERE lead_id = ?", (lead_id,))
-    await db.commit()
+    await (
+        CampaignLead.update({CampaignLead.status: "bounced"})
+        .where(CampaignLead.lead_id == lead_id)
+        .run()
+    )
 
     log.info("Hard bounce: lead %d marked invalid, all campaigns bounced", lead_id)
 
 
 async def _handle_soft_bounce(
-    db: aiosqlite.Connection,
+    db,
     email_sent_id: int,
     lead_id: int,
 ) -> None:
     """Soft bounce: increment retry, escalate to hard after MAX_SOFT_RETRIES."""
+    from db.tables import EmailSent
+
     # Check how many times this email has bounced
-    cursor = await db.execute(
-        """SELECT COUNT(*) FROM emails_sent
-           WHERE lead_id = ? AND status = 'bounced'""",
-        (lead_id,),
-    )
-    row = await cursor.fetchone()
-    bounce_count = (row[0] if row else 0) + 1
+    rows = await EmailSent.raw(
+        "SELECT COUNT(*) AS cnt FROM emails_sent WHERE lead_id = {} AND status = 'bounced'",
+        lead_id,
+    ).run()
+    bounce_count = (rows[0]["cnt"] if rows else 0) + 1
 
     if bounce_count >= MAX_SOFT_RETRIES:
         log.info(
@@ -225,7 +230,7 @@ async def _handle_soft_bounce(
         )
 
 
-async def check_bounces(db: aiosqlite.Connection, mb: object) -> int:
+async def check_bounces(db: Any, mb: object) -> int:
     """Poll IMAP for bounce DSNs and apply bounce processing.
 
     Returns the number of bounce messages processed.

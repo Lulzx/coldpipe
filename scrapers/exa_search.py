@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import os
+from typing import Any
 from urllib.parse import urlparse
 
-import aiosqlite
 from exa_py import Exa
 
-from db.models import Lead
 from db.queries import upsert_lead
+from db.tables import Lead
 
 
 class ExaScraper:
@@ -17,7 +17,7 @@ class ExaScraper:
 
     async def scrape(
         self,
-        db: aiosqlite.Connection,
+        db: Any = None,
         *,
         query: str = "local business",
         city: str = "",

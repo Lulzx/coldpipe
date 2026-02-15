@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
-import aiosqlite
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
 from crawl4ai.extraction_strategy import JsonCssExtractionStrategy
 
-from db.models import Lead
 from db.queries import upsert_lead
+from db.tables import Lead
 
 # ---------------------------------------------------------------------------
 # CSS extraction schemas per directory site
@@ -107,7 +107,7 @@ class DirectoryScraper:
 
     async def scrape(
         self,
-        db: aiosqlite.Connection,
+        db: Any = None,
         *,
         city: str = "New York",
         directories: list[str] | None = None,
@@ -137,7 +137,7 @@ class DirectoryScraper:
 
                 try:
                     items = json.loads(result.extracted_content)
-                except (json.JSONDecodeError, TypeError):
+                except json.JSONDecodeError, TypeError:
                     continue
 
                 for item in items[:max_results]:

@@ -8,13 +8,12 @@ from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlparse
 
-import aiosqlite
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
 from crawl4ai.deep_crawling import BFSDeepCrawlStrategy
 from crawl4ai.extraction_strategy import LLMExtractionStrategy
 
-from db.models import Lead
 from db.queries import get_leads, upsert_lead
+from db.tables import Lead
 from shared.email_utils import is_junk
 from shared.http import create_sessions
 from shared.patterns import generate_candidates
@@ -71,7 +70,7 @@ class WebsiteEnricher:
 
     async def scrape(
         self,
-        db: aiosqlite.Connection,
+        db: Any = None,
         *,
         limit: int = 50,
         lead_ids: list[int] | None = None,
@@ -162,7 +161,7 @@ class WebsiteEnricher:
                 # Apply enrichment data to lead
                 emails = [e for e in data.get("emails", []) if not is_junk(e)]
                 if emails and not lead.email:
-                    fields = {k: getattr(lead, k) for k in lead.__struct_fields__}
+                    fields = lead.to_dict()
                     fields["email"] = emails[0]
                     lead = Lead(**fields)
 
@@ -207,7 +206,7 @@ class WebsiteEnricher:
                 updates["enriched_at"] = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
                 if updates:
-                    fields = {k: getattr(lead, k) for k in lead.__struct_fields__}
+                    fields = lead.to_dict()
                     fields.update(updates)
                     updated = Lead(**fields)
                     await upsert_lead(db, updated)

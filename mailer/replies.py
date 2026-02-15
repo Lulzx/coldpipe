@@ -7,9 +7,9 @@ import contextlib
 import email
 import logging
 from email.message import Message
+from typing import Any
 
 import aioimaplib
-import aiosqlite
 
 from config.settings import ImapSettings
 from db import queries
@@ -30,7 +30,7 @@ class ReplyWatcher:
 
     def __init__(
         self,
-        db: aiosqlite.Connection,
+        db: Any,
         imap_settings: ImapSettings,
         *,
         poll_interval: int = POLL_INTERVAL,
@@ -185,7 +185,7 @@ class ReplyWatcher:
         await self.disconnect()
 
 
-async def check_replies(db: aiosqlite.Connection, mb: object) -> int:
+async def check_replies(db: Any, mb: object) -> int:
     """Thin wrapper for daemon: poll a mailbox for replies. Returns matched count."""
     watcher = ReplyWatcher(
         db,

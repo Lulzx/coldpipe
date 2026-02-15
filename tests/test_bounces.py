@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from db import queries
-from db.models import Campaign, EmailSent, Lead
+from db.tables import Campaign, EmailSent, Lead
 from mailer.bounces import parse_dsn, process_bounce
 
 

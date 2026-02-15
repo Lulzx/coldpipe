@@ -9,7 +9,7 @@ from rich.table import Table
 from cli import _run
 from config import setup_logging
 from db import get_db, queries
-from db.models import Mailbox
+from db.tables import Mailbox
 
 console = Console()
 mailbox_app = typer.Typer(help="Mailbox management commands.")

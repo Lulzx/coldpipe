@@ -1,20 +1,13 @@
 {% extends "base.html" %}
+{% from "_macros/components.html" import status_badge, page_header, filter_select, empty_state %}
 {% block title %}Leads - Coldpipe{% endblock %}
 {% block content %}
-<div class="page-header d-print-none mb-3">
-  <div class="row align-items-center">
-    <div class="col">
-      <h2 class="page-title">Leads</h2>
-      <div class="text-muted mt-1">{{ total }} lead{{ 's' if total != 1 }}</div>
-    </div>
-    <div class="col-auto">
-      <a href="/leads/export" class="btn btn-outline-primary">
-        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-download" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2"/><polyline points="7 11 12 16 17 11"/><line x1="12" y1="4" x2="12" y2="16"/></svg>
-        Export CSV
-      </a>
-    </div>
-  </div>
-</div>
+{% call page_header("Leads", total ~ " lead" ~ ("s" if total != 1 else "")) %}
+<a href="/leads/export" class="btn btn-outline-primary">
+  <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-download" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2"/><polyline points="7 11 12 16 17 11"/><line x1="12" y1="4" x2="12" y2="16"/></svg>
+  Export CSV
+</a>
+{% endcall %}
 
 <div class="card mb-3">
   <div class="card-body">
@@ -65,34 +58,12 @@
           </td>
           <td>{{ lead.email }}</td>
           <td>{{ lead.company }}</td>
-          <td>
-            {% if lead.email_status == 'valid' %}
-            <span class="badge bg-green-lt">valid</span>
-            {% elif lead.email_status == 'invalid' %}
-            <span class="badge bg-red-lt">invalid</span>
-            {% elif lead.email_status == 'catch_all' %}
-            <span class="badge bg-yellow-lt">catch_all</span>
-            {% elif lead.email_status == 'risky' %}
-            <span class="badge bg-orange-lt">risky</span>
-            {% else %}
-            <span class="badge bg-secondary-lt">{{ lead.email_status }}</span>
-            {% endif %}
-          </td>
+          <td>{{ status_badge(lead.email_status) }}</td>
           <td>{{ lead.source }}</td>
           <td>{{ lead.created_at[:10] if lead.created_at else '-' }}</td>
         </tr>
         {% else %}
-        <tr>
-          <td colspan="6">
-            <div class="empty py-4">
-              <div class="empty-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-lg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0"/><path d="M3 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0 -3 -3.85"/></svg>
-              </div>
-              <p class="empty-title">No leads found</p>
-              <p class="empty-subtitle text-muted">Import leads via CLI or scraper to get started.</p>
-            </div>
-          </td>
-        </tr>
+        {{ empty_state("No leads found", "Import leads via CLI or scraper to get started.", 6, '<svg xmlns="http://www.w3.org/2000/svg" class="icon icon-lg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0"/><path d="M3 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0 -3 -3.85"/></svg>') }}
         {% endfor %}
       </tbody>
     </table>

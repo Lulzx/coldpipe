@@ -9,7 +9,7 @@ from rich.table import Table
 from cli import _run
 from config import setup_logging
 from db import get_db, queries
-from db.models import Deal
+from db.tables import Deal
 
 console = Console()
 deals_app = typer.Typer(help="Deal pipeline management.")

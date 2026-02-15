@@ -184,11 +184,14 @@ def start():
         async def warmup_job():
             """Advance warmup day counter for all active mailboxes."""
             try:
-                async with get_db() as db:
-                    await db.execute(
-                        "UPDATE mailboxes SET warmup_day = warmup_day + 1 WHERE is_active = 1"
+                async with get_db():
+                    from db.tables import Mailbox
+
+                    await (
+                        Mailbox.update({Mailbox.warmup_day: Mailbox.warmup_day + 1})
+                        .where(Mailbox.is_active == 1)
+                        .run()
                     )
-                    await db.commit()
                     log.info("warmup_job complete")
             except Exception:
                 log.error("warmup_job error", exc_info=True)
@@ -214,14 +217,14 @@ def start():
                 cursor = await bdb.execute("PRAGMA integrity_check")
                 result = await cursor.fetchone()
                 if result and result[0] != "ok":
-                    log.error("backup_integrity_failed", path=str(backup_path))
+                    log.error("backup_integrity_failed: %s", str(backup_path))
                     backup_path.unlink(missing_ok=True)
                     return
             # Retention: keep last 7
             backups = sorted(backup_dir.glob("coldpipe_*.db"))
             for old in backups[:-7]:
                 old.unlink(missing_ok=True)
-            log.info("backup_complete", path=str(backup_path))
+            log.info("backup_complete: %s", str(backup_path))
 
         stop = asyncio.Event()
         loop = asyncio.get_event_loop()

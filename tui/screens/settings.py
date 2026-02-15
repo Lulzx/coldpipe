@@ -19,7 +19,7 @@ from textual.widgets import (
 )
 
 from db import DBPool, queries
-from db.models import Mailbox
+from db.tables import Mailbox
 
 
 class SettingsScreen(Screen):

@@ -86,7 +86,7 @@ class Settings(msgspec.Struct, kw_only=True):
 
         try:
             ZoneInfo(self.send.timezone)
-        except (KeyError, ValueError):
+        except KeyError, ValueError:
             errors.append(f"send.timezone is not a valid IANA zone: {self.send.timezone!r}")
 
         if not 1 <= self.scraper.max_concurrent <= 500:

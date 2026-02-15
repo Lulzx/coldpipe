@@ -9,7 +9,7 @@ from rich.table import Table
 from cli import _run
 from config import setup_logging
 from db import get_db, queries
-from db.models import Campaign, SequenceStep
+from db.tables import Campaign, SequenceStep
 
 console = Console()
 campaign_app = typer.Typer(help="Campaign management commands.")

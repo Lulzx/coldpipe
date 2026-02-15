@@ -5,9 +5,8 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, time
+from typing import Any
 from zoneinfo import ZoneInfo
-
-import aiosqlite
 
 from config.settings import SendSettings
 from db import queries
@@ -48,7 +47,7 @@ class SendQueue:
 
     def __init__(
         self,
-        db: aiosqlite.Connection,
+        db: Any,
         campaign_id: int,
         mailbox_id: int,
         send_settings: SendSettings | None = None,

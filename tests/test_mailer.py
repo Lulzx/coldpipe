@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 import pytest
 
 from db import queries
-from db.models import Campaign, EmailSent, Lead, Mailbox, SequenceStep
+from db.tables import Campaign, EmailSent, Lead, Mailbox, SequenceStep
 from mailer.queue import SendQueue, warmup_daily_limit
 from mailer.sequences import advance_sequence, complete_sequence, handle_reply
 

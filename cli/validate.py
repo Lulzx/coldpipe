@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import typer
 from rich.console import Console
 from rich.progress import Progress
@@ -9,6 +11,7 @@ from rich.progress import Progress
 from cli import _run
 from config import setup_logging
 from db import get_db, queries
+from db.tables import Lead
 
 console = Console()
 validate_app = typer.Typer(help="Validate lead email addresses.")
@@ -52,11 +55,12 @@ def run(
                             "catch-all": "catch_all",
                         }
                         mapped = status_map.get(status, "unknown")
-                        await db.execute(
-                            "UPDATE leads SET email_status = ?, validated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                            (mapped, lead.id),
+                        now_iso = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+                        await (
+                            Lead.update({Lead.email_status: mapped, Lead.validated_at: now_iso})
+                            .where(Lead.id == lead.id)
+                            .run()
                         )
-                        await db.commit()
                         validated += 1
                     except Exception as e:
                         console.print(f"[red]Error validating {lead.email}: {e}[/red]")

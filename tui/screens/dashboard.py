@@ -54,38 +54,46 @@ class DashboardScreen(Screen):
         self.run_worker(self._load_stats(), exclusive=True)
 
     async def _load_stats(self) -> None:
-        async with self._pool.acquire() as db:
-            pipeline = await queries.get_pipeline_stats(db)
-            deals = await queries.get_deals(db)
+        async with self._pool.acquire():
+            pipeline = await queries.get_pipeline_stats()
+            deals = await queries.get_deals()
             today = datetime.now(UTC).strftime("%Y-%m-%d")
 
             # Today's email stats
-            cursor = await db.execute(
-                """SELECT status, COUNT(*) FROM emails_sent
-                   WHERE DATE(sent_at) = ? GROUP BY status""",
-                (today,),
+            from piccolo.querystring import QueryString
+
+            from db import get_engine
+
+            engine = get_engine()
+            email_rows = await engine.run_querystring(
+                QueryString(
+                    "SELECT status, COUNT(*) as cnt FROM emails_sent"
+                    " WHERE DATE(sent_at) = {} GROUP BY status",
+                    today,
+                )
             )
-            email_rows = await cursor.fetchall()
             email_stats: dict[str, int] = {}
             for row in email_rows:
-                email_stats[row[0]] = row[1]
+                email_stats[row["status"]] = row["cnt"]
 
             total_sent = sum(email_stats.values())
             replies = email_stats.get("replied", 0)
             bounces = email_stats.get("bounced", 0)
 
             # Daily limit info
-            cursor2 = await db.execute("SELECT SUM(daily_limit) FROM mailboxes WHERE is_active = 1")
-            row2 = await cursor2.fetchone()
-            daily_cap = row2[0] if row2 and row2[0] else 0
+            limit_rows = await engine.run_querystring(
+                QueryString("SELECT SUM(daily_limit) as total FROM mailboxes WHERE is_active = 1")
+            )
+            daily_cap = limit_rows[0]["total"] if limit_rows and limit_rows[0]["total"] else 0
 
             # New leads today
-            cursor3 = await db.execute(
-                "SELECT COUNT(*) FROM leads WHERE DATE(created_at) = ?",
-                (today,),
+            lead_rows = await engine.run_querystring(
+                QueryString(
+                    "SELECT COUNT(*) as cnt FROM leads WHERE DATE(created_at) = {}",
+                    today,
+                )
             )
-            row3 = await cursor3.fetchone()
-            new_leads = row3[0] if row3 else 0
+            new_leads = lead_rows[0]["cnt"] if lead_rows else 0
 
         # Revenue
         pipeline_rev = sum(d.value for d in deals if d.stage not in ("closed_won", "closed_lost"))

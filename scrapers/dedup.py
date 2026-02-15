@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
-import aiosqlite
+from typing import Any
+
 from rapidfuzz import fuzz
 
-from db.models import Lead
 from db.queries import delete_lead, get_leads
+from db.tables import Lead
 
 FUZZY_THRESHOLD = 85
 
 
-async def deduplicate_leads(db: aiosqlite.Connection) -> int:
+async def deduplicate_leads(db: Any = None) -> int:
     """Remove near-duplicate leads from the database.
 
     Strategy:

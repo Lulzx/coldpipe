@@ -1,4 +1,4 @@
-"""Tool 3: MX + SMTP email verification."""
+"""Tool 3: Email verification via email-validator + SMTP probing."""
 
 import argparse
 import asyncio
@@ -10,9 +10,9 @@ import time
 from shared.csv_io import load_leads, save_csv
 
 try:
-    import aiodns
+    from email_validator import EmailNotValidError, validate_email
 except ImportError:
-    sys.exit("aiodns is required: pip install aiodns")
+    sys.exit("email-validator is required: pip install email-validator")
 
 try:
     import aiosmtplib
@@ -23,33 +23,41 @@ except ImportError:
 class EmailValidator:
     def __init__(self, concurrency: int = 50):
         self.concurrency = concurrency
-        self.mx_cache: dict[str, list[str]] = {}  # domain -> [mx_hosts]
         self.catchall_cache: dict[str, bool] = {}  # domain -> is_catchall
         self.domain_sems: dict[str, asyncio.Semaphore] = {}
-        self.resolver = None
 
     def _get_domain_sem(self, domain: str) -> asyncio.Semaphore:
         if domain not in self.domain_sems:
             self.domain_sems[domain] = asyncio.Semaphore(3)
         return self.domain_sems[domain]
 
-    async def mx_lookup(self, domain: str) -> list[str]:
-        """Resolve MX records for a domain. Returns sorted list of MX hosts."""
-        if domain in self.mx_cache:
-            return self.mx_cache[domain]
+    def validate_syntax_and_mx(self, email: str) -> dict:
+        """Validate email syntax and check MX records via email-validator.
 
-        if self.resolver is None:
-            self.resolver = aiodns.DNSResolver()
-
+        Returns dict with keys: valid, mx_host, provider, error.
+        """
         try:
-            records = await self.resolver.query(domain, "MX")
-            hosts = sorted(records, key=lambda r: r.priority)
-            result = [r.host for r in hosts]
-        except Exception:
-            result = []
+            info = validate_email(email, check_deliverability=True)
+            mx_host = ""
+            if info.mx:
+                mx_host = info.mx[0][1]
+            provider = self._detect_provider_from_mx(info.mx or [])
+            return {"valid": True, "mx_host": mx_host, "provider": provider, "error": ""}
+        except EmailNotValidError as e:
+            return {"valid": False, "mx_host": "", "provider": "generic", "error": str(e)}
 
-        self.mx_cache[domain] = result
-        return result
+    @staticmethod
+    def _detect_provider_from_mx(mx_records: list) -> str:
+        """Detect email provider from MX records."""
+        for _priority, host in mx_records:
+            h = host.lower()
+            if "google" in h or "gmail" in h:
+                return "gmail"
+            if "outlook" in h or "protection.outlook" in h:
+                return "microsoft365"
+            if "yahoo" in h:
+                return "yahoo"
+        return "generic"
 
     async def smtp_verify(self, email: str, mx_host: str) -> str:
         """Probe SMTP server with RCPT TO. Returns 'valid', 'invalid', or 'error'."""
@@ -90,38 +98,32 @@ class EmailValidator:
         self.catchall_cache[domain] = is_catchall
         return is_catchall
 
-    def detect_provider(self, mx_hosts: list[str]) -> str:
-        """Detect email provider from MX hostnames."""
-        for host in mx_hosts:
-            h = host.lower()
-            if "google" in h or "gmail" in h:
-                return "gmail"
-            if "outlook" in h or "protection.outlook" in h:
-                return "microsoft365"
-            if "yahoo" in h:
-                return "yahoo"
-        return "generic"
-
     async def validate_email(self, email: str) -> dict:
         """Full validation pipeline for a single email."""
-        domain = email.split("@")[1] if "@" in email else ""
-        if not domain:
-            return {"validation_status": "error", "mx_host": "", "provider": "generic"}
+        # Step 1: Syntax + MX via email-validator
+        check = self.validate_syntax_and_mx(email)
+        if not check["valid"]:
+            status = (
+                "no-mx"
+                if "dns" in check["error"].lower() or "mx" in check["error"].lower()
+                else "invalid"
+            )
+            return {"validation_status": status, "mx_host": "", "provider": check["provider"]}
 
-        mx_hosts = await self.mx_lookup(domain)
-        if not mx_hosts:
-            return {"validation_status": "no-mx", "mx_host": "", "provider": "generic"}
+        mx_host = check["mx_host"]
+        provider = check["provider"]
 
-        mx_host = mx_hosts[0]
-        provider = self.detect_provider(mx_hosts)
+        if not mx_host:
+            return {"validation_status": "no-mx", "mx_host": "", "provider": provider}
 
-        # Check catch-all first (cached per domain)
+        # Step 2: Check catch-all (cached per domain)
+        domain = email.split("@")[1]
         is_catchall = await self.check_catchall(domain, mx_host)
 
         if is_catchall:
             return {"validation_status": "catch-all", "mx_host": mx_host, "provider": provider}
 
-        # SMTP verify the actual email
+        # Step 3: SMTP verify the actual email
         result = await self.smtp_verify(email, mx_host)
         return {"validation_status": result, "mx_host": mx_host, "provider": provider}
 
@@ -130,15 +132,18 @@ class EmailValidator:
 
         Returns a list of dicts with keys: email, status, provider, is_catchall.
         """
-        mx_hosts = await self.mx_lookup(domain)
-        if not mx_hosts:
+        # Check first candidate for syntax/MX
+        if not candidates:
+            return []
+        check = self.validate_syntax_and_mx(candidates[0])
+        if not check["valid"] or not check["mx_host"]:
             return [
                 {"email": c, "status": "no-mx", "provider": "generic", "is_catchall": False}
                 for c in candidates
             ]
 
-        mx_host = mx_hosts[0]
-        provider = self.detect_provider(mx_hosts)
+        mx_host = check["mx_host"]
+        provider = check["provider"]
         is_catchall = await self.check_catchall(domain, mx_host)
 
         if is_catchall:

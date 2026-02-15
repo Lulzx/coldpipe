@@ -1,21 +1,13 @@
 {% extends "base.html" %}
+{% from "_macros/components.html" import status_badge, page_header, filter_select, empty_state %}
 {% block title %}Deals - Coldpipe{% endblock %}
 {% block content %}
-<div class="page-header d-print-none mb-3">
-  <div class="row align-items-center">
-    <div class="col">
-      <h2 class="page-title">Deals</h2>
-      <div class="text-muted mt-1">
-        Pipeline: ${{ "%.0f"|format(stats.pipeline_value) }} |
-        Closed: ${{ "%.0f"|format(stats.closed_value) }}
-      </div>
-    </div>
-    <div class="col-auto d-flex gap-2">
-      <button class="btn btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#createDealForm">New Deal</button>
-      <a href="/deals/pipeline" class="btn btn-outline-primary">Pipeline View</a>
-    </div>
-  </div>
+{% call page_header("Deals", "Pipeline: $" ~ "%.0f"|format(stats.pipeline_value) ~ " | Closed: $" ~ "%.0f"|format(stats.closed_value)) %}
+<div class="d-flex gap-2">
+  <button class="btn btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#createDealForm">New Deal</button>
+  <a href="/deals/pipeline" class="btn btn-outline-primary">Pipeline View</a>
 </div>
+{% endcall %}
 
 <div class="collapse mb-3" id="createDealForm">
   <div class="card">
@@ -57,14 +49,7 @@
 
 <div class="card mb-3">
   <div class="card-body">
-    <form method="get" action="/deals" class="d-flex gap-2">
-      <select name="stage" class="form-select" style="max-width: 200px;" onchange="this.form.submit()">
-        <option value="">All stages</option>
-        {% for s in stages %}
-        <option value="{{ s }}"{% if stage == s %} selected{% endif %}>{{ s|replace('_', ' ')|title }}</option>
-        {% endfor %}
-      </select>
-    </form>
+    {{ filter_select("stage", stages, stage, "All stages", "/deals") }}
   </div>
 </div>
 
@@ -87,17 +72,7 @@
         <tr>
           <td>{{ d.id }}</td>
           <td><a href="/leads/{{ d.lead_id }}">Lead #{{ d.lead_id }}</a></td>
-          <td>
-            {% if d.stage == 'closed_won' %}
-            <span class="badge bg-green-lt">{{ d.stage|replace('_', ' ') }}</span>
-            {% elif d.stage == 'closed_lost' %}
-            <span class="badge bg-red-lt">{{ d.stage|replace('_', ' ') }}</span>
-            {% elif d.stage == 'interested' or d.stage == 'meeting_booked' %}
-            <span class="badge bg-blue-lt">{{ d.stage|replace('_', ' ') }}</span>
-            {% else %}
-            <span class="badge bg-secondary-lt">{{ d.stage|replace('_', ' ') }}</span>
-            {% endif %}
-          </td>
+          <td>{{ status_badge(d.stage) }}</td>
           <td>${{ "%.0f"|format(d.value) }}</td>
           <td>{{ d.notes[:50] }}{% if d.notes|length > 50 %}...{% endif %}</td>
           <td>{{ d.created_at[:10] if d.created_at else '-' }}</td>
@@ -119,17 +94,7 @@
           </td>
         </tr>
         {% else %}
-        <tr>
-          <td colspan="7">
-            <div class="empty py-4">
-              <div class="empty-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-lg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"/><path d="M14.8 9a2 2 0 0 0 -1.8 -1h-2a2 2 0 1 0 0 4h2a2 2 0 1 1 0 4h-2a2 2 0 0 1 -1.8 -1"/><path d="M12 7v10"/></svg>
-              </div>
-              <p class="empty-title">No deals found</p>
-              <p class="empty-subtitle text-muted">Create a deal to start tracking your pipeline.</p>
-            </div>
-          </td>
-        </tr>
+        {{ empty_state("No deals found", "Create a deal to start tracking your pipeline.", 7, '<svg xmlns="http://www.w3.org/2000/svg" class="icon icon-lg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"/><path d="M14.8 9a2 2 0 0 0 -1.8 -1h-2a2 2 0 1 0 0 4h2a2 2 0 1 1 0 4h-2a2 2 0 0 1 -1.8 -1"/><path d="M12 7v10"/></svg>') }}
         {% endfor %}
       </tbody>
     </table>

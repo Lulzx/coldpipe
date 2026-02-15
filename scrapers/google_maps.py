@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import json
 import os
+from typing import Any
 
-import aiosqlite
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
 from crawl4ai.extraction_strategy import LLMExtractionStrategy
 
-from db.models import Lead
 from db.queries import upsert_lead
+from db.tables import Lead
 
 _SYSTEM_PROMPT = """Extract business information from Google Maps search results.
 For each result, extract:
@@ -48,7 +48,7 @@ class GoogleMapsScraper:
 
     async def scrape(
         self,
-        db: aiosqlite.Connection,
+        db: Any = None,
         *,
         city: str = "New York",
         max_results: int = 20,
@@ -93,7 +93,7 @@ class GoogleMapsScraper:
 
             try:
                 items = json.loads(result.extracted_content)
-            except (json.JSONDecodeError, TypeError):
+            except json.JSONDecodeError, TypeError:
                 return leads
 
             for item in items[:max_results]:

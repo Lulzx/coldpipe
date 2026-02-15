@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
-import aiosqlite
-
-from db.models import Lead
+from db.tables import Lead
 
 
 @runtime_checkable
@@ -16,4 +14,4 @@ class BaseScraper(Protocol):
     The method should return a list of Lead structs ready for upsert.
     """
 
-    async def scrape(self, db: aiosqlite.Connection, **kwargs) -> list[Lead]: ...
+    async def scrape(self, db: Any = None, **kwargs) -> list[Lead]: ...

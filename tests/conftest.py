@@ -2,24 +2,21 @@
 
 from __future__ import annotations
 
-import aiosqlite
+from pathlib import Path
+
 import pytest
 import pytest_asyncio
 
-from db.migrate import migrate
+from db import close_db, init_db
 
 
 @pytest_asyncio.fixture
-async def db():
-    """In-memory SQLite database, initialized with schema + migrations."""
-    conn = await aiosqlite.connect(":memory:")
-    await conn.execute("PRAGMA journal_mode = WAL")
-    await conn.execute("PRAGMA foreign_keys = ON")
-    await conn.execute("PRAGMA busy_timeout = 5000")
-    conn.row_factory = aiosqlite.Row
-    await migrate(conn)
-    yield conn
-    await conn.close()
+async def db(tmp_path: Path):
+    """Temp-file SQLite database, initialized with Piccolo tables + indexes."""
+    db_file = tmp_path / "test.db"
+    await init_db(db_file)
+    yield None  # queries use Piccolo engine directly, db param is ignored
+    await close_db()
 
 
 @pytest.fixture

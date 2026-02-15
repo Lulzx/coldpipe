@@ -1,13 +1,8 @@
 {% extends "base.html" %}
+{% from "_macros/components.html" import status_badge, page_header, empty_state %}
 {% block title %}Campaigns - Coldpipe{% endblock %}
 {% block content %}
-<div class="page-header d-print-none mb-3">
-  <div class="row align-items-center">
-    <div class="col">
-      <h2 class="page-title">Campaigns</h2>
-    </div>
-  </div>
-</div>
+{{ page_header("Campaigns") }}
 
 <div class="card mb-3">
   <div class="card-body">
@@ -40,35 +35,13 @@
         {% for c in campaigns %}
         <tr>
           <td><a href="/campaigns/{{ c.id }}">{{ c.name }}</a></td>
-          <td>
-            {% if c.status == 'active' %}
-            <span class="badge bg-green-lt">active</span>
-            {% elif c.status == 'paused' %}
-            <span class="badge bg-yellow-lt">paused</span>
-            {% elif c.status == 'completed' %}
-            <span class="badge bg-blue-lt">completed</span>
-            {% elif c.status == 'draft' %}
-            <span class="badge bg-secondary-lt">draft</span>
-            {% else %}
-            <span class="badge bg-secondary-lt">{{ c.status }}</span>
-            {% endif %}
-          </td>
+          <td>{{ status_badge(c.status) }}</td>
           <td>{{ c.mailbox_id or '-' }}</td>
           <td>{{ c.daily_limit }}</td>
           <td>{{ c.created_at[:10] if c.created_at else '-' }}</td>
         </tr>
         {% else %}
-        <tr>
-          <td colspan="5">
-            <div class="empty py-4">
-              <div class="empty-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-lg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3 8l4 -16l3 8h4"/></svg>
-              </div>
-              <p class="empty-title">No campaigns found</p>
-              <p class="empty-subtitle text-muted">Create a campaign via CLI to get started.</p>
-            </div>
-          </td>
-        </tr>
+        {{ empty_state("No campaigns found", "Create a campaign via CLI to get started.", 5, '<svg xmlns="http://www.w3.org/2000/svg" class="icon icon-lg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3 8l4 -16l3 8h4"/></svg>') }}
         {% endfor %}
       </tbody>
     </table>

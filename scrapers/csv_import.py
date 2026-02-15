@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import re
+from typing import Any
 
-import aiosqlite
-
-from db.models import Lead
 from db.queries import upsert_lead
+from db.tables import Lead
 from shared.csv_io import load_all_leads
 
 # Common US state abbreviations for location parsing
@@ -130,7 +129,7 @@ class CsvImporter:
 
     async def scrape(
         self,
-        db: aiosqlite.Connection,
+        db: Any = None,
         *,
         data_dir: str = "data",
     ) -> list[Lead]:

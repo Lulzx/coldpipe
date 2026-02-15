@@ -51,12 +51,13 @@ def _setup():
 
 async def _init_db():
     from config import setup_logging
-    from db import get_db
-    from db.migrate import migrate
+    from db import get_db, get_engine
+    from db.migrate import migrate_legacy
 
     setup_logging()
-    async with get_db() as db:
-        version = await migrate(db)
+    async with get_db():
+        engine = get_engine()
+        version = await migrate_legacy(engine)
         console.print(f"  Database initialized at schema version {version}")
 
 
@@ -83,8 +84,8 @@ def _write_config(timezone: str, daily_limit: int):
 
 async def _add_mailbox():
     from db import get_db
-    from db.models import Mailbox
     from db.queries import upsert_mailbox
+    from db.tables import Mailbox
 
     email = Prompt.ask("  Email address")
     smtp_host = Prompt.ask("  SMTP host", default="smtp.gmail.com")
@@ -122,8 +123,8 @@ async def _import_leads(csv_path: str):
     import csv as csv_mod
 
     from db import get_db
-    from db.models import Lead
     from db.queries import upsert_lead
+    from db.tables import Lead
 
     path = Path(csv_path)
     if not path.exists():

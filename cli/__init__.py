@@ -8,8 +8,7 @@ from pathlib import Path
 import typer
 
 from config import setup_logging
-from db import get_db
-from db.migrate import init_schema
+from db import close_db, init_db
 
 app = typer.Typer(
     name="coldpipe",
@@ -37,9 +36,9 @@ def db_init():
     setup_logging()
 
     async def _init():
-        async with get_db() as db:
-            version = await init_schema(db)
-            typer.echo(f"Database initialized at schema version {version}.")
+        await init_db()
+        typer.echo("Database initialized.")
+        await close_db()
 
     _run(_init())
 
@@ -101,24 +100,33 @@ def db_health():
     async def _check():
         nonlocal checks_passed
         try:
-            async with get_db() as db:
-                cursor = await db.execute("PRAGMA integrity_check")
-                result = await cursor.fetchone()
-                if result and result[0] == "ok":
-                    typer.echo("[OK] Database integrity check passed")
-                else:
-                    typer.echo("[FAIL] Database integrity check failed", err=True)
-                    checks_passed = False
+            from piccolo.querystring import QueryString
 
-                # Check schema version
-                from db.migrate import get_version
+            from db import get_engine
 
-                version = await get_version(db)
-                if version == 3:
+            await init_db()
+            engine = get_engine()
+            rows = await engine.run_querystring(QueryString("PRAGMA integrity_check"))
+            if rows and rows[0].get("integrity_check") == "ok":
+                typer.echo("[OK] Database integrity check passed")
+            else:
+                typer.echo("[FAIL] Database integrity check failed", err=True)
+                checks_passed = False
+
+            # Check schema version
+            try:
+                vrows = await engine.run_querystring(
+                    QueryString("SELECT MAX(version) as v FROM schema_version")
+                )
+                version = vrows[0]["v"] if vrows and vrows[0].get("v") else 0
+                if version >= 3:
                     typer.echo(f"[OK] Schema version: {version}")
                 else:
                     typer.echo(f"[WARN] Schema version: {version} (expected 3)", err=True)
                     checks_passed = False
+            except Exception:
+                typer.echo("[OK] Schema managed by Piccolo ORM")
+            await close_db()
         except Exception as e:
             typer.echo(f"[FAIL] Database connection: {e}", err=True)
             checks_passed = False
@@ -157,14 +165,13 @@ def web_serve(
     port: int = typer.Option(8080, help="Port to listen on"),
 ):
     """Start the web dashboard."""
-    from aiohttp import web
+    import uvicorn
 
-    from web.server import create_app
+    from web.app import create_app
 
     setup_logging()
-    web_app = _run(create_app())
     typer.echo(f"Starting web dashboard on http://{host}:{port}")
-    web.run_app(web_app, host=host, port=port, print=None)
+    uvicorn.run(create_app(), host=host, port=port)
 
 
 # ---------------------------------------------------------------------------

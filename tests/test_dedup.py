@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from db import queries
-from db.models import Lead
+from db.tables import Lead
 
 # Import directly to avoid pulling in exa_py dependency
 from scrapers.dedup import deduplicate_leads
@@ -13,12 +13,10 @@ from scrapers.dedup import deduplicate_leads
 
 async def _insert_null_email_lead(db, first_name: str, last_name: str, company: str) -> int:
     """Insert a lead with NULL email directly (bypasses upsert_lead's email lookup)."""
-    cursor = await db.execute(
-        "INSERT INTO leads (email, first_name, last_name, company) VALUES (NULL, ?, ?, ?)",
-        (first_name, last_name, company),
-    )
-    await db.commit()
-    return cursor.lastrowid
+    result = await Lead.insert(
+        Lead(email=None, first_name=first_name, last_name=last_name, company=company)
+    ).run()
+    return result[0]["id"]
 
 
 @pytest.mark.asyncio

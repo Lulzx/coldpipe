@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from db import queries
-from db.models import Lead
+from db.tables import Lead
 from scrapers.base import BaseScraper
 from scrapers.csv_import import CsvImporter, _parse_location
 

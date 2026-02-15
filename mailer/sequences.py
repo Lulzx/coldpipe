@@ -4,17 +4,16 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime, timedelta
-
-import aiosqlite
+from typing import Any
 
 from db import queries
-from db.models import Deal, EmailSent
+from db.tables import CampaignLead, Deal, EmailSent
 
 log = logging.getLogger(__name__)
 
 
 async def advance_sequence(
-    db: aiosqlite.Connection,
+    db: Any = None,
     *,
     campaign_lead_id: int,
     campaign_id: int,
@@ -81,8 +80,8 @@ async def advance_sequence(
 
 
 async def complete_sequence(
-    db: aiosqlite.Connection,
-    campaign_lead_id: int,
+    db: Any = None,
+    campaign_lead_id: int = 0,
 ) -> None:
     """Mark a campaign-lead as completed (all steps finished)."""
     await queries.update_campaign_lead_status(db, campaign_lead_id, "completed")
@@ -90,7 +89,7 @@ async def complete_sequence(
 
 
 async def handle_reply(
-    db: aiosqlite.Connection,
+    db: Any = None,
     *,
     email_sent_id: int,
     campaign_id: int | None,
@@ -109,13 +108,13 @@ async def handle_reply(
 
     # 2. Stop the sequence for this lead in the campaign
     if campaign_id is not None:
-        cursor = await db.execute(
-            "SELECT id FROM campaign_leads WHERE campaign_id = ? AND lead_id = ?",
-            (campaign_id, lead_id),
+        rows = (
+            await CampaignLead.select(CampaignLead.id)
+            .where((CampaignLead.campaign_id == campaign_id) & (CampaignLead.lead_id == lead_id))
+            .run()
         )
-        row = await cursor.fetchone()
-        if row:
-            await queries.update_campaign_lead_status(db, row[0], "replied")
+        if rows:
+            await queries.update_campaign_lead_status(db, rows[0]["id"], "replied")
 
     # 3. Auto-create deal
     deal = Deal(

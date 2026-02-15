@@ -1,16 +1,21 @@
-"""Async query functions for all database operations."""
+"""Async query functions using Piccolo ORM.
+
+All functions accept an optional `db` parameter for backward compatibility
+with the transition period. This parameter is ignored — queries go through
+the Piccolo engine.
+"""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
-
-import aiosqlite
+from typing import Any
 
 from shared.crypto import decrypt, encrypt
 
-from .models import (
+from .tables import (
     Campaign,
     CampaignLead,
+    DailySendLog,
     Deal,
     EmailSent,
     Lead,
@@ -26,10 +31,6 @@ def _now() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _row_to_struct[T](row: aiosqlite.Row, cls: type[T], keys: list[str]) -> T:
-    return cls(**dict(zip(keys, row, strict=False)))
-
-
 def _escape_like(value: str) -> str:
     """Escape special LIKE characters (%, _, \\) for safe use in LIKE clauses."""
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
@@ -39,42 +40,20 @@ def _escape_like(value: str) -> str:
 # Leads
 # ---------------------------------------------------------------------------
 
-_LEAD_COLS = [
-    "id",
-    "email",
-    "first_name",
-    "last_name",
-    "company",
-    "job_title",
-    "website",
-    "phone",
-    "address",
-    "city",
-    "state",
-    "zip",
-    "source",
-    "source_url",
-    "email_status",
-    "enriched_at",
-    "validated_at",
-    "tags",
-    "notes",
-    "created_at",
-    "updated_at",
-    "email_confidence",
-    "email_source",
-    "email_provider",
-]
 
-
-async def upsert_lead(db: aiosqlite.Connection, lead: Lead) -> int:
+async def upsert_lead(db: Any = None, lead: Any = None, **kw) -> int:
     """Insert or update a lead by email. Returns the lead id."""
-    await db.execute(
+    # Support both positional (db, lead) and keyword (lead=lead) calling
+    if lead is None and db is not None and hasattr(db, "email"):
+        lead = db
+        db = None
+
+    await Lead.raw(
         """INSERT INTO leads (email, first_name, last_name, company, job_title, website,
                               phone, address, city, state, zip, source, source_url,
                               email_status, enriched_at, validated_at, tags, notes,
                               email_confidence, email_source, email_provider)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           VALUES ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})
            ON CONFLICT(email) DO UPDATE SET
                first_name       = CASE WHEN excluded.first_name   != '' THEN excluded.first_name   ELSE leads.first_name   END,
                last_name        = CASE WHEN excluded.last_name    != '' THEN excluded.last_name    ELSE leads.last_name    END,
@@ -97,50 +76,50 @@ async def upsert_lead(db: aiosqlite.Connection, lead: Lead) -> int:
                email_source     = CASE WHEN excluded.email_source     != '' THEN excluded.email_source     ELSE leads.email_source     END,
                email_provider   = CASE WHEN excluded.email_provider   != '' THEN excluded.email_provider   ELSE leads.email_provider   END
         """,
-        (
-            lead.email,
-            lead.first_name,
-            lead.last_name,
-            lead.company,
-            lead.job_title,
-            lead.website,
-            lead.phone,
-            lead.address,
-            lead.city,
-            lead.state,
-            lead.zip,
-            lead.source,
-            lead.source_url,
-            lead.email_status,
-            lead.enriched_at,
-            lead.validated_at,
-            lead.tags,
-            lead.notes,
-            lead.email_confidence,
-            lead.email_source,
-            lead.email_provider,
-        ),
-    )
-    await db.commit()
-    cursor = await db.execute("SELECT id FROM leads WHERE email = ?", (lead.email,))
-    row = await cursor.fetchone()
-    if row is None:
+        lead.email,
+        lead.first_name,
+        lead.last_name,
+        lead.company,
+        lead.job_title,
+        lead.website,
+        lead.phone,
+        lead.address,
+        lead.city,
+        lead.state,
+        lead.zip,
+        lead.source,
+        lead.source_url,
+        lead.email_status,
+        lead.enriched_at,
+        lead.validated_at,
+        lead.tags,
+        lead.notes,
+        lead.email_confidence,
+        lead.email_source,
+        lead.email_provider,
+    ).run()
+
+    rows = await Lead.select(Lead.id).where(Lead.email == lead.email).run()
+    if not rows:
         raise RuntimeError(f"Lead not found after upsert: {lead.email}")
-    return row[0]
+    return rows[0]["id"]
 
 
-async def upsert_leads_batch(db: aiosqlite.Connection, leads: list[Lead]) -> int:
+async def upsert_leads_batch(db: Any = None, leads: list | None = None, **kw) -> int:
     """Batch upsert leads. Returns count of rows affected."""
+    if leads is None and db is not None and isinstance(db, list):
+        leads = db
+        db = None
+
     count = 0
-    for lead in leads:
-        await upsert_lead(db, lead)
+    for lead in leads or []:
+        await upsert_lead(lead=lead)
         count += 1
-    await db.commit()
     return count
 
 
 async def get_leads(
-    db: aiosqlite.Connection,
+    db: Any = None,
     *,
     limit: int = 100,
     offset: int = 0,
@@ -148,101 +127,90 @@ async def get_leads(
     source: str | None = None,
 ) -> list[Lead]:
     """Fetch leads with optional filters."""
-    q = "SELECT * FROM leads WHERE 1=1"
-    params: list = []
+    query = Lead.select().order_by(Lead.id, ascending=False)
     if email_status:
-        q += " AND email_status = ?"
-        params.append(email_status)
+        query = query.where(Lead.email_status == email_status)
     if source:
-        q += " AND source = ?"
-        params.append(source)
-    q += " ORDER BY id DESC LIMIT ? OFFSET ?"
-    params.extend([limit, offset])
-
-    cursor = await db.execute(q, params)
-    rows = await cursor.fetchall()
-    return [_row_to_struct(r, Lead, _LEAD_COLS) for r in rows]
+        query = query.where(Lead.source == source)
+    query = query.limit(limit).offset(offset)
+    rows = await query.run()
+    return [Lead(**r) for r in rows]
 
 
-async def get_lead_by_id(db: aiosqlite.Connection, lead_id: int) -> Lead | None:
-    cursor = await db.execute("SELECT * FROM leads WHERE id = ?", (lead_id,))
-    row = await cursor.fetchone()
-    if row is None:
+async def get_lead_by_id(db: Any = None, lead_id: int = 0) -> Lead | None:
+    if lead_id == 0 and db is not None and isinstance(db, int):
+        lead_id = db
+        db = None
+    rows = await Lead.select().where(Lead.id == lead_id).run()
+    if not rows:
         return None
-    return _row_to_struct(row, Lead, _LEAD_COLS)
+    return Lead(**rows[0])
 
 
-async def get_lead_by_email(db: aiosqlite.Connection, email: str) -> Lead | None:
-    cursor = await db.execute("SELECT * FROM leads WHERE email = ?", (email,))
-    row = await cursor.fetchone()
-    if row is None:
+async def get_lead_by_email(db: Any = None, email: str = "") -> Lead | None:
+    if email == "" and db is not None and isinstance(db, str):
+        email = db
+        db = None
+    rows = await Lead.select().where(Lead.email == email).run()
+    if not rows:
         return None
-    return _row_to_struct(row, Lead, _LEAD_COLS)
+    return Lead(**rows[0])
 
 
-async def search_leads(db: aiosqlite.Connection, query: str, *, limit: int = 50) -> list[Lead]:
+async def search_leads(db: Any = None, query: str = "", *, limit: int = 50) -> list[Lead]:
     """Search leads by email, name, or company (LIKE match)."""
+    if query == "" and db is not None and isinstance(db, str):
+        query = db
+        db = None
     pattern = f"%{_escape_like(query)}%"
-    cursor = await db.execute(
+    rows = await Lead.raw(
         """SELECT * FROM leads
-           WHERE email LIKE ? ESCAPE '\\' OR first_name LIKE ? ESCAPE '\\'
-                 OR last_name LIKE ? ESCAPE '\\' OR company LIKE ? ESCAPE '\\'
-                 OR website LIKE ? ESCAPE '\\'
-           ORDER BY id DESC LIMIT ?""",
-        (pattern, pattern, pattern, pattern, pattern, limit),
-    )
-    rows = await cursor.fetchall()
-    return [_row_to_struct(r, Lead, _LEAD_COLS) for r in rows]
+           WHERE email LIKE {} ESCAPE '\\' OR first_name LIKE {} ESCAPE '\\'
+                 OR last_name LIKE {} ESCAPE '\\' OR company LIKE {} ESCAPE '\\'
+                 OR website LIKE {} ESCAPE '\\'
+           ORDER BY id DESC LIMIT {}""",
+        pattern,
+        pattern,
+        pattern,
+        pattern,
+        pattern,
+        limit,
+    ).run()
+    return [Lead(**r) for r in rows]
 
 
-async def count_leads(db: aiosqlite.Connection, *, email_status: str | None = None) -> int:
-    q = "SELECT COUNT(*) FROM leads"
-    params: list[str] = []
+async def count_leads(db: Any = None, *, email_status: str | None = None) -> int:
+    query = Lead.count()
     if email_status:
-        q += " WHERE email_status = ?"
-        params.append(email_status)
-    cursor = await db.execute(q, params)
-    row = await cursor.fetchone()
-    return row[0] if row is not None else 0
+        query = query.where(Lead.email_status == email_status)
+    return await query.run()
 
 
-async def delete_lead(db: aiosqlite.Connection, lead_id: int) -> bool:
-    cursor = await db.execute("DELETE FROM leads WHERE id = ?", (lead_id,))
-    await db.commit()
-    return cursor.rowcount > 0
+async def delete_lead(db: Any = None, lead_id: int = 0) -> bool:
+    if lead_id == 0 and db is not None and isinstance(db, int):
+        lead_id = db
+        db = None
+    result = await Lead.delete().where(Lead.id == lead_id).run()
+    return len(result) >= 0  # delete always succeeds if no error
 
 
 # ---------------------------------------------------------------------------
 # Mailboxes
 # ---------------------------------------------------------------------------
 
-_MAILBOX_COLS = [
-    "id",
-    "email",
-    "smtp_host",
-    "smtp_port",
-    "smtp_user",
-    "smtp_pass",
-    "imap_host",
-    "imap_port",
-    "imap_user",
-    "imap_pass",
-    "daily_limit",
-    "warmup_day",
-    "is_active",
-    "display_name",
-    "created_at",
-]
 
+async def upsert_mailbox(db: Any = None, mb: Any = None, **kw) -> int:
+    if mb is None and db is not None and hasattr(db, "smtp_host"):
+        mb = db
+        db = None
 
-async def upsert_mailbox(db: aiosqlite.Connection, mb: Mailbox) -> int:
     smtp_pass = encrypt(mb.smtp_pass)
     imap_pass = encrypt(mb.imap_pass)
-    await db.execute(
+    await Mailbox.raw(
         """INSERT INTO mailboxes (email, smtp_host, smtp_port, smtp_user, smtp_pass,
                                    imap_host, imap_port, imap_user, imap_pass,
                                    daily_limit, warmup_day, is_active, display_name)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           VALUES ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})
            ON CONFLICT(email) DO UPDATE SET
                smtp_host = excluded.smtp_host, smtp_port = excluded.smtp_port,
                smtp_user = excluded.smtp_user, smtp_pass = excluded.smtp_pass,
@@ -251,72 +219,72 @@ async def upsert_mailbox(db: aiosqlite.Connection, mb: Mailbox) -> int:
                daily_limit = excluded.daily_limit, warmup_day = excluded.warmup_day,
                is_active = excluded.is_active, display_name = excluded.display_name
         """,
-        (
-            mb.email,
-            mb.smtp_host,
-            mb.smtp_port,
-            mb.smtp_user,
-            smtp_pass,
-            mb.imap_host,
-            mb.imap_port,
-            mb.imap_user,
-            imap_pass,
-            mb.daily_limit,
-            mb.warmup_day,
-            mb.is_active,
-            mb.display_name,
-        ),
-    )
-    await db.commit()
-    cursor = await db.execute("SELECT id FROM mailboxes WHERE email = ?", (mb.email,))
-    row = await cursor.fetchone()
-    if row is None:
+        mb.email,
+        mb.smtp_host,
+        mb.smtp_port,
+        mb.smtp_user,
+        smtp_pass,
+        mb.imap_host,
+        mb.imap_port,
+        mb.imap_user,
+        imap_pass,
+        mb.daily_limit,
+        mb.warmup_day,
+        mb.is_active,
+        mb.display_name,
+    ).run()
+
+    rows = await Mailbox.select(Mailbox.id).where(Mailbox.email == mb.email).run()
+    if not rows:
         raise RuntimeError(f"Mailbox not found after upsert: {mb.email}")
-    return row[0]
+    return rows[0]["id"]
 
 
-async def get_mailboxes(db: aiosqlite.Connection, *, active_only: bool = False) -> list[Mailbox]:
-    q = "SELECT * FROM mailboxes"
+async def get_mailboxes(db: Any = None, *, active_only: bool = False) -> list[Mailbox]:
+    query = Mailbox.select().order_by(Mailbox.id)
     if active_only:
-        q += " WHERE is_active = 1"
-    q += " ORDER BY id"
-    cursor = await db.execute(q)
-    rows = await cursor.fetchall()
-    mailboxes = [_row_to_struct(r, Mailbox, _MAILBOX_COLS) for r in rows]
+        query = query.where(Mailbox.is_active == 1)
+    rows = await query.run()
+    mailboxes = [Mailbox(**r) for r in rows]
     for m in mailboxes:
         m.smtp_pass = decrypt(m.smtp_pass)
         m.imap_pass = decrypt(m.imap_pass)
     return mailboxes
 
 
-async def get_mailbox_by_id(db: aiosqlite.Connection, mailbox_id: int) -> Mailbox | None:
-    cursor = await db.execute("SELECT * FROM mailboxes WHERE id = ?", (mailbox_id,))
-    row = await cursor.fetchone()
-    if row is None:
+async def get_mailbox_by_id(db: Any = None, mailbox_id: int = 0) -> Mailbox | None:
+    if mailbox_id == 0 and db is not None and isinstance(db, int):
+        mailbox_id = db
+        db = None
+    rows = await Mailbox.select().where(Mailbox.id == mailbox_id).run()
+    if not rows:
         return None
-    mb = _row_to_struct(row, Mailbox, _MAILBOX_COLS)
+    mb = Mailbox(**rows[0])
     mb.smtp_pass = decrypt(mb.smtp_pass)
     mb.imap_pass = decrypt(mb.imap_pass)
     return mb
 
 
-async def encrypt_existing_passwords(db: aiosqlite.Connection) -> int:
+async def encrypt_existing_passwords(db: Any = None) -> int:
     """One-time migration: encrypt any plaintext mailbox passwords."""
-    cursor = await db.execute("SELECT id, smtp_pass, imap_pass FROM mailboxes")
-    rows = await cursor.fetchall()
+    rows = await Mailbox.select(Mailbox.id, Mailbox.smtp_pass, Mailbox.imap_pass).run()
     count = 0
     for row in rows:
-        mid, smtp_pass, imap_pass = row[0], row[1], row[2]
+        mid, smtp_pass, imap_pass = row["id"], row["smtp_pass"], row["imap_pass"]
         new_smtp = encrypt(smtp_pass)
         new_imap = encrypt(imap_pass)
         if new_smtp != smtp_pass or new_imap != imap_pass:
-            await db.execute(
-                "UPDATE mailboxes SET smtp_pass = ?, imap_pass = ? WHERE id = ?",
-                (new_smtp, new_imap, mid),
+            await (
+                Mailbox.update(
+                    {
+                        Mailbox.smtp_pass: new_smtp,
+                        Mailbox.imap_pass: new_imap,
+                    }
+                )
+                .where(Mailbox.id == mid)
+                .run()
             )
             count += 1
-    if count:
-        await db.commit()
     return count
 
 
@@ -324,181 +292,176 @@ async def encrypt_existing_passwords(db: aiosqlite.Connection) -> int:
 # Campaigns
 # ---------------------------------------------------------------------------
 
-_CAMPAIGN_COLS = [
-    "id",
-    "name",
-    "status",
-    "mailbox_id",
-    "daily_limit",
-    "timezone",
-    "send_window_start",
-    "send_window_end",
-    "created_at",
-    "updated_at",
-]
+
+async def create_campaign(db: Any = None, camp: Any = None, **kw) -> int:
+    if camp is None and db is not None and hasattr(db, "name"):
+        camp = db
+        db = None
+
+    result = await Campaign.insert(
+        Campaign(
+            name=camp.name,
+            status=camp.status,
+            mailbox_id=camp.mailbox_id,
+            daily_limit=camp.daily_limit,
+            timezone=camp.timezone,
+            send_window_start=camp.send_window_start,
+            send_window_end=camp.send_window_end,
+        )
+    ).run()
+    return result[0]["id"]
 
 
-async def create_campaign(db: aiosqlite.Connection, camp: Campaign) -> int:
-    cursor = await db.execute(
-        """INSERT INTO campaigns (name, status, mailbox_id, daily_limit, timezone,
-                                   send_window_start, send_window_end)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (
-            camp.name,
-            camp.status,
-            camp.mailbox_id,
-            camp.daily_limit,
-            camp.timezone,
-            camp.send_window_start,
-            camp.send_window_end,
-        ),
-    )
-    await db.commit()
-    if cursor.lastrowid is None:
-        raise RuntimeError("Failed to create campaign: no lastrowid")
-    return cursor.lastrowid
-
-
-async def get_campaigns(db: aiosqlite.Connection, *, status: str | None = None) -> list[Campaign]:
-    q = "SELECT * FROM campaigns"
-    params: list = []
+async def get_campaigns(db: Any = None, *, status: str | None = None) -> list[Campaign]:
+    query = Campaign.select().order_by(Campaign.id, ascending=False)
     if status:
-        q += " WHERE status = ?"
-        params.append(status)
-    q += " ORDER BY id DESC"
-    cursor = await db.execute(q, params)
-    rows = await cursor.fetchall()
-    return [_row_to_struct(r, Campaign, _CAMPAIGN_COLS) for r in rows]
+        query = query.where(Campaign.status == status)
+    rows = await query.run()
+    return [Campaign(**r) for r in rows]
 
 
-async def get_campaign_by_id(db: aiosqlite.Connection, campaign_id: int) -> Campaign | None:
-    cursor = await db.execute("SELECT * FROM campaigns WHERE id = ?", (campaign_id,))
-    row = await cursor.fetchone()
-    if row is None:
+async def get_campaign_by_id(db: Any = None, campaign_id: int = 0) -> Campaign | None:
+    if campaign_id == 0 and db is not None and isinstance(db, int):
+        campaign_id = db
+        db = None
+    rows = await Campaign.select().where(Campaign.id == campaign_id).run()
+    if not rows:
         return None
-    return _row_to_struct(row, Campaign, _CAMPAIGN_COLS)
+    return Campaign(**rows[0])
 
 
-async def update_campaign_status(db: aiosqlite.Connection, campaign_id: int, status: str) -> bool:
-    cursor = await db.execute("UPDATE campaigns SET status = ? WHERE id = ?", (status, campaign_id))
-    await db.commit()
-    return cursor.rowcount > 0
+async def update_campaign_status(db: Any = None, campaign_id: int = 0, status: str = "") -> bool:
+    if campaign_id == 0 and db is not None and isinstance(db, int):
+        campaign_id = db
+        db = None
+        status = status or ""
+    await Campaign.update({Campaign.status: status}).where(Campaign.id == campaign_id).run()
+    return True
 
 
 # ---------------------------------------------------------------------------
 # Sequence steps
 # ---------------------------------------------------------------------------
 
-_STEP_COLS = [
-    "id",
-    "campaign_id",
-    "step_number",
-    "template_name",
-    "subject",
-    "delay_days",
-    "is_reply",
-]
+
+async def add_sequence_step(db: Any = None, step: Any = None, **kw) -> int:
+    if step is None and db is not None and hasattr(db, "step_number"):
+        step = db
+        db = None
+
+    result = await SequenceStep.insert(
+        SequenceStep(
+            campaign_id=step.campaign_id,
+            step_number=step.step_number,
+            template_name=step.template_name,
+            subject=step.subject,
+            delay_days=step.delay_days,
+            is_reply=step.is_reply,
+        )
+    ).run()
+    return result[0]["id"]
 
 
-async def add_sequence_step(db: aiosqlite.Connection, step: SequenceStep) -> int:
-    cursor = await db.execute(
-        """INSERT INTO sequence_steps (campaign_id, step_number, template_name,
-                                        subject, delay_days, is_reply)
-           VALUES (?, ?, ?, ?, ?, ?)""",
-        (
-            step.campaign_id,
-            step.step_number,
-            step.template_name,
-            step.subject,
-            step.delay_days,
-            step.is_reply,
-        ),
+async def get_sequence_steps(db: Any = None, campaign_id: int = 0) -> list[SequenceStep]:
+    if campaign_id == 0 and db is not None and isinstance(db, int):
+        campaign_id = db
+        db = None
+    rows = (
+        await SequenceStep.select()
+        .where(SequenceStep.campaign_id == campaign_id)
+        .order_by(SequenceStep.step_number)
+        .run()
     )
-    await db.commit()
-    if cursor.lastrowid is None:
-        raise RuntimeError("Failed to add sequence step: no lastrowid")
-    return cursor.lastrowid
-
-
-async def get_sequence_steps(db: aiosqlite.Connection, campaign_id: int) -> list[SequenceStep]:
-    cursor = await db.execute(
-        "SELECT * FROM sequence_steps WHERE campaign_id = ? ORDER BY step_number",
-        (campaign_id,),
-    )
-    rows = await cursor.fetchall()
-    return [_row_to_struct(r, SequenceStep, _STEP_COLS) for r in rows]
+    return [SequenceStep(**r) for r in rows]
 
 
 # ---------------------------------------------------------------------------
 # Campaign leads
 # ---------------------------------------------------------------------------
 
-_CL_COLS = [
-    "id",
-    "campaign_id",
-    "lead_id",
-    "current_step",
-    "status",
-    "enrolled_at",
-    "last_sent_at",
-    "next_send_at",
-]
 
+async def enroll_lead(db: Any = None, campaign_id: int = 0, lead_id: int = 0) -> int:
+    if campaign_id == 0 and db is not None and isinstance(db, int):
+        campaign_id = db
+        db = None
 
-async def enroll_lead(db: aiosqlite.Connection, campaign_id: int, lead_id: int) -> int:
-    cursor = await db.execute(
-        """INSERT INTO campaign_leads (campaign_id, lead_id) VALUES (?, ?)
+    await CampaignLead.raw(
+        """INSERT INTO campaign_leads (campaign_id, lead_id) VALUES ({}, {})
            ON CONFLICT(campaign_id, lead_id) DO NOTHING""",
-        (campaign_id, lead_id),
+        campaign_id,
+        lead_id,
+    ).run()
+
+    rows = (
+        await CampaignLead.select(CampaignLead.id)
+        .where((CampaignLead.campaign_id == campaign_id) & (CampaignLead.lead_id == lead_id))
+        .run()
     )
-    await db.commit()
-    return cursor.lastrowid or 0
+    return rows[0]["id"] if rows else 0
 
 
 async def get_campaign_leads(
-    db: aiosqlite.Connection,
-    campaign_id: int,
+    db: Any = None,
+    campaign_id: int = 0,
     *,
     status: str | None = None,
 ) -> list[CampaignLead]:
-    q = "SELECT * FROM campaign_leads WHERE campaign_id = ?"
-    params: list = [campaign_id]
+    if campaign_id == 0 and db is not None and isinstance(db, int):
+        campaign_id = db
+        db = None
+
+    query = (
+        CampaignLead.select()
+        .where(CampaignLead.campaign_id == campaign_id)
+        .order_by(CampaignLead.id)
+    )
     if status:
-        q += " AND status = ?"
-        params.append(status)
-    q += " ORDER BY id"
-    cursor = await db.execute(q, params)
-    rows = await cursor.fetchall()
-    return [_row_to_struct(r, CampaignLead, _CL_COLS) for r in rows]
+        query = query.where(CampaignLead.status == status)
+    rows = await query.run()
+    return [CampaignLead(**r) for r in rows]
 
 
 async def advance_step(
-    db: aiosqlite.Connection,
-    campaign_lead_id: int,
+    db: Any = None,
+    campaign_lead_id: int = 0,
     *,
     next_send_at: str | None = None,
 ) -> bool:
     """Increment current_step and update last_sent_at."""
-    cursor = await db.execute(
+    if campaign_lead_id == 0 and db is not None and isinstance(db, int):
+        campaign_lead_id = db
+        db = None
+
+    await CampaignLead.raw(
         """UPDATE campaign_leads
            SET current_step = current_step + 1,
-               last_sent_at = ?,
-               next_send_at = ?
-           WHERE id = ?""",
-        (_now(), next_send_at, campaign_lead_id),
-    )
-    await db.commit()
-    return cursor.rowcount > 0
+               last_sent_at = {},
+               next_send_at = {}
+           WHERE id = {}""",
+        _now(),
+        next_send_at,
+        campaign_lead_id,
+    ).run()
+    return True
 
 
 async def update_campaign_lead_status(
-    db: aiosqlite.Connection, campaign_lead_id: int, status: str
+    db: Any = None, campaign_lead_id: int = 0, status: str = ""
 ) -> bool:
-    cursor = await db.execute(
-        "UPDATE campaign_leads SET status = ? WHERE id = ?", (status, campaign_lead_id)
+    if campaign_lead_id == 0 and db is not None and isinstance(db, int):
+        campaign_lead_id = db
+        db = None
+        status = status or ""
+    await (
+        CampaignLead.update(
+            {
+                CampaignLead.status: status,
+            }
+        )
+        .where(CampaignLead.id == campaign_lead_id)
+        .run()
     )
-    await db.commit()
-    return cursor.rowcount > 0
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -507,16 +470,17 @@ async def update_campaign_lead_status(
 
 
 async def get_send_queue(
-    db: aiosqlite.Connection,
-    campaign_id: int,
+    db: Any = None,
+    campaign_id: int = 0,
     *,
     limit: int = 50,
 ) -> list[dict]:
-    """Get leads ready to receive the next email in a campaign sequence.
+    """Get leads ready to receive the next email in a campaign sequence."""
+    if campaign_id == 0 and db is not None and isinstance(db, int):
+        campaign_id = db
+        db = None
 
-    Returns dicts with campaign_lead info + lead details + step template.
-    """
-    cursor = await db.execute(
+    rows = await CampaignLead.raw(
         """SELECT cl.id AS cl_id, cl.campaign_id, cl.lead_id, cl.current_step,
                   l.email, l.first_name, l.last_name, l.company, l.website,
                   ss.template_name, ss.subject, ss.delay_days, ss.is_reply
@@ -524,129 +488,106 @@ async def get_send_queue(
            JOIN leads l ON l.id = cl.lead_id
            JOIN sequence_steps ss ON ss.campaign_id = cl.campaign_id
                                   AND ss.step_number = cl.current_step
-           WHERE cl.campaign_id = ?
+           WHERE cl.campaign_id = {}
              AND cl.status = 'active'
              AND (cl.next_send_at IS NULL OR cl.next_send_at <= strftime('%Y-%m-%dT%H:%M:%SZ','now'))
            ORDER BY cl.id
-           LIMIT ?""",
-        (campaign_id, limit),
-    )
-    cols = [d[0] for d in cursor.description]
-    rows = await cursor.fetchall()
-    return [dict(zip(cols, r, strict=False)) for r in rows]
+           LIMIT {}""",
+        campaign_id,
+        limit,
+    ).run()
+    return [dict(r) for r in rows]
 
 
 # ---------------------------------------------------------------------------
 # Emails sent
 # ---------------------------------------------------------------------------
 
-_ES_COLS = [
-    "id",
-    "campaign_lead_id",
-    "campaign_id",
-    "lead_id",
-    "mailbox_id",
-    "step_number",
-    "message_id",
-    "subject",
-    "to_email",
-    "from_email",
-    "body_text",
-    "status",
-    "sent_at",
-    "replied_at",
-    "bounced_at",
-    "bounce_reason",
-]
+
+async def log_send(db: Any = None, es: Any = None, **kw) -> int:
+    if es is None and db is not None and hasattr(db, "message_id"):
+        es = db
+        db = None
+
+    result = await EmailSent.insert(
+        EmailSent(
+            campaign_lead_id=es.campaign_lead_id,
+            campaign_id=es.campaign_id,
+            lead_id=es.lead_id,
+            mailbox_id=es.mailbox_id,
+            step_number=es.step_number,
+            message_id=es.message_id,
+            subject=es.subject,
+            to_email=es.to_email,
+            from_email=es.from_email,
+            body_text=es.body_text,
+            status=es.status,
+        )
+    ).run()
+    return result[0]["id"]
 
 
-async def log_send(db: aiosqlite.Connection, es: EmailSent) -> int:
-    cursor = await db.execute(
-        """INSERT INTO emails_sent (campaign_lead_id, campaign_id, lead_id, mailbox_id,
-                                     step_number, message_id, subject, to_email,
-                                     from_email, body_text, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (
-            es.campaign_lead_id,
-            es.campaign_id,
-            es.lead_id,
-            es.mailbox_id,
-            es.step_number,
-            es.message_id,
-            es.subject,
-            es.to_email,
-            es.from_email,
-            es.body_text,
-            es.status,
-        ),
-    )
-    await db.commit()
-    if cursor.lastrowid is None:
-        raise RuntimeError("Failed to log send: no lastrowid")
-    return cursor.lastrowid
+async def update_email_status(db: Any = None, email_id: int = 0, status: str = "") -> bool:
+    if email_id == 0 and db is not None and isinstance(db, int):
+        email_id = db
+        db = None
+        status = status or ""
 
-
-async def update_email_status(db: aiosqlite.Connection, email_id: int, status: str) -> bool:
-    updates = ["status = ?"]
-    params: list = [status]
+    updates: dict = {EmailSent.status: status}
     if status == "replied":
-        updates.append("replied_at = ?")
-        params.append(_now())
+        updates[EmailSent.replied_at] = _now()
     elif status == "bounced":
-        updates.append("bounced_at = ?")
-        params.append(_now())
-    params.append(email_id)
-    cursor = await db.execute(f"UPDATE emails_sent SET {', '.join(updates)} WHERE id = ?", params)
-    await db.commit()
-    return cursor.rowcount > 0
+        updates[EmailSent.bounced_at] = _now()
+
+    await EmailSent.update(updates).where(EmailSent.id == email_id).run()
+    return True
 
 
-async def get_emails_for_lead(db: aiosqlite.Connection, lead_id: int) -> list[EmailSent]:
-    cursor = await db.execute(
-        "SELECT * FROM emails_sent WHERE lead_id = ? ORDER BY sent_at DESC", (lead_id,)
+async def get_emails_for_lead(db: Any = None, lead_id: int = 0) -> list[EmailSent]:
+    if lead_id == 0 and db is not None and isinstance(db, int):
+        lead_id = db
+        db = None
+    rows = (
+        await EmailSent.select()
+        .where(EmailSent.lead_id == lead_id)
+        .order_by(EmailSent.sent_at, ascending=False)
+        .run()
     )
-    rows = await cursor.fetchall()
-    return [_row_to_struct(r, EmailSent, _ES_COLS) for r in rows]
+    return [EmailSent(**r) for r in rows]
 
 
 async def get_emails_sent(
-    db: aiosqlite.Connection,
+    db: Any = None,
     *,
     limit: int = 50,
     offset: int = 0,
     status: str | None = None,
 ) -> list[EmailSent]:
     """Fetch sent emails with optional status filter."""
-    q = "SELECT * FROM emails_sent WHERE 1=1"
-    params: list = []
+    query = EmailSent.select().order_by(EmailSent.id, ascending=False)
     if status:
-        q += " AND status = ?"
-        params.append(status)
-    q += " ORDER BY id DESC LIMIT ? OFFSET ?"
-    params.extend([limit, offset])
-    cursor = await db.execute(q, params)
-    rows = await cursor.fetchall()
-    return [_row_to_struct(r, EmailSent, _ES_COLS) for r in rows]
+        query = query.where(EmailSent.status == status)
+    query = query.limit(limit).offset(offset)
+    rows = await query.run()
+    return [EmailSent(**r) for r in rows]
 
 
-async def count_emails_sent(db: aiosqlite.Connection, *, status: str | None = None) -> int:
+async def count_emails_sent(db: Any = None, *, status: str | None = None) -> int:
     """Count sent emails with optional status filter."""
-    q = "SELECT COUNT(*) FROM emails_sent"
-    params: list[str] = []
+    query = EmailSent.count()
     if status:
-        q += " WHERE status = ?"
-        params.append(status)
-    cursor = await db.execute(q, params)
-    row = await cursor.fetchone()
-    return row[0] if row is not None else 0
+        query = query.where(EmailSent.status == status)
+    return await query.run()
 
 
-async def get_email_by_message_id(db: aiosqlite.Connection, message_id: str) -> EmailSent | None:
-    cursor = await db.execute("SELECT * FROM emails_sent WHERE message_id = ?", (message_id,))
-    row = await cursor.fetchone()
-    if row is None:
+async def get_email_by_message_id(db: Any = None, message_id: str = "") -> EmailSent | None:
+    if message_id == "" and db is not None and isinstance(db, str):
+        message_id = db
+        db = None
+    rows = await EmailSent.select().where(EmailSent.message_id == message_id).run()
+    if not rows:
         return None
-    return _row_to_struct(row, EmailSent, _ES_COLS)
+    return EmailSent(**rows[0])
 
 
 # ---------------------------------------------------------------------------
@@ -654,122 +595,123 @@ async def get_email_by_message_id(db: aiosqlite.Connection, message_id: str) -> 
 # ---------------------------------------------------------------------------
 
 
-async def check_daily_limit(db: aiosqlite.Connection, mailbox_id: int) -> tuple[int, int]:
+async def check_daily_limit(db: Any = None, mailbox_id: int = 0) -> tuple[int, int]:
     """Returns (sent_today, daily_limit)."""
-    today = datetime.now(UTC).strftime("%Y-%m-%d")
-    cursor = await db.execute(
-        "SELECT count FROM daily_send_log WHERE mailbox_id = ? AND send_date = ?",
-        (mailbox_id, today),
-    )
-    row = await cursor.fetchone()
-    sent = row[0] if row else 0
+    if mailbox_id == 0 and db is not None and isinstance(db, int):
+        mailbox_id = db
+        db = None
 
-    cursor2 = await db.execute("SELECT daily_limit FROM mailboxes WHERE id = ?", (mailbox_id,))
-    row2 = await cursor2.fetchone()
-    limit = row2[0] if row2 else 30
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
+    rows = (
+        await DailySendLog.select(DailySendLog.send_count)
+        .where((DailySendLog.mailbox_id == mailbox_id) & (DailySendLog.send_date == today))
+        .run()
+    )
+    sent = rows[0]["count"] if rows else 0
+
+    rows2 = await Mailbox.select(Mailbox.daily_limit).where(Mailbox.id == mailbox_id).run()
+    limit = rows2[0]["daily_limit"] if rows2 else 30
     return sent, limit
 
 
-async def increment_daily_send(db: aiosqlite.Connection, mailbox_id: int) -> int:
+async def increment_daily_send(db: Any = None, mailbox_id: int = 0) -> int:
     """Increment today's send count. Returns new count."""
+    if mailbox_id == 0 and db is not None and isinstance(db, int):
+        mailbox_id = db
+        db = None
+
     today = datetime.now(UTC).strftime("%Y-%m-%d")
-    await db.execute(
-        """INSERT INTO daily_send_log (mailbox_id, send_date, count) VALUES (?, ?, 1)
+    await DailySendLog.raw(
+        """INSERT INTO daily_send_log (mailbox_id, send_date, count) VALUES ({}, {}, 1)
            ON CONFLICT(mailbox_id, send_date) DO UPDATE SET count = count + 1""",
-        (mailbox_id, today),
+        mailbox_id,
+        today,
+    ).run()
+
+    rows = (
+        await DailySendLog.select(DailySendLog.send_count)
+        .where((DailySendLog.mailbox_id == mailbox_id) & (DailySendLog.send_date == today))
+        .run()
     )
-    await db.commit()
-    cursor = await db.execute(
-        "SELECT count FROM daily_send_log WHERE mailbox_id = ? AND send_date = ?",
-        (mailbox_id, today),
-    )
-    row = await cursor.fetchone()
-    return row[0] if row is not None else 0
+    return rows[0]["count"] if rows else 0
 
 
 # ---------------------------------------------------------------------------
 # Deals
 # ---------------------------------------------------------------------------
 
-_DEAL_COLS = [
-    "id",
-    "lead_id",
-    "campaign_id",
-    "stage",
-    "value",
-    "close_date",
-    "loss_reason",
-    "notes",
-    "created_at",
-    "updated_at",
-]
 
+async def upsert_deal(db: Any = None, deal: Any = None, **kw) -> int:
+    if deal is None and db is not None and hasattr(db, "stage"):
+        deal = db
+        db = None
 
-async def upsert_deal(db: aiosqlite.Connection, deal: Deal) -> int:
-    if deal.id:
-        await db.execute(
-            """UPDATE deals SET stage = ?, value = ?, close_date = ?,
-                                loss_reason = ?, notes = ? WHERE id = ?""",
-            (deal.stage, deal.value, deal.close_date, deal.loss_reason, deal.notes, deal.id),
+    if isinstance(deal.id, int) and deal.id:
+        await (
+            Deal.update(
+                {
+                    Deal.stage: deal.stage,
+                    Deal.value: deal.value,
+                    Deal.close_date: deal.close_date,
+                    Deal.loss_reason: deal.loss_reason,
+                    Deal.notes: deal.notes,
+                }
+            )
+            .where(Deal.id == deal.id)
+            .run()
         )
-        await db.commit()
         return deal.id
-    cursor = await db.execute(
-        """INSERT INTO deals (lead_id, campaign_id, stage, value, close_date, loss_reason, notes)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (
-            deal.lead_id,
-            deal.campaign_id,
-            deal.stage,
-            deal.value,
-            deal.close_date,
-            deal.loss_reason,
-            deal.notes,
-        ),
-    )
-    await db.commit()
-    if cursor.lastrowid is None:
-        raise RuntimeError("Failed to upsert deal: no lastrowid")
-    return cursor.lastrowid
+
+    result = await Deal.insert(
+        Deal(
+            lead_id=deal.lead_id,
+            campaign_id=deal.campaign_id,
+            stage=deal.stage,
+            value=deal.value,
+            close_date=deal.close_date,
+            loss_reason=deal.loss_reason,
+            notes=deal.notes,
+        )
+    ).run()
+    return result[0]["id"]
 
 
-async def get_deals(db: aiosqlite.Connection, *, stage: str | None = None) -> list[Deal]:
-    q = "SELECT * FROM deals"
-    params: list = []
+async def get_deals(db: Any = None, *, stage: str | None = None) -> list[Deal]:
+    query = Deal.select().order_by(Deal.id, ascending=False)
     if stage:
-        q += " WHERE stage = ?"
-        params.append(stage)
-    q += " ORDER BY id DESC"
-    cursor = await db.execute(q, params)
-    rows = await cursor.fetchall()
-    return [_row_to_struct(r, Deal, _DEAL_COLS) for r in rows]
+        query = query.where(Deal.stage == stage)
+    rows = await query.run()
+    return [Deal(**r) for r in rows]
 
 
-async def get_deal_by_id(db: aiosqlite.Connection, deal_id: int) -> Deal | None:
-    cursor = await db.execute("SELECT * FROM deals WHERE id = ?", (deal_id,))
-    row = await cursor.fetchone()
-    if row is None:
+async def get_deal_by_id(db: Any = None, deal_id: int = 0) -> Deal | None:
+    if deal_id == 0 and db is not None and isinstance(db, int):
+        deal_id = db
+        db = None
+    rows = await Deal.select().where(Deal.id == deal_id).run()
+    if not rows:
         return None
-    return _row_to_struct(row, Deal, _DEAL_COLS)
+    return Deal(**rows[0])
 
 
 # ---------------------------------------------------------------------------
 # Tracking events
 # ---------------------------------------------------------------------------
 
-_TE_COLS = ["id", "email_sent_id", "event_type", "metadata", "created_at"]
 
+async def log_tracking_event(db: Any = None, evt: Any = None, **kw) -> int:
+    if evt is None and db is not None and hasattr(db, "event_type"):
+        evt = db
+        db = None
 
-async def log_tracking_event(db: aiosqlite.Connection, evt: TrackingEvent) -> int:
-    cursor = await db.execute(
-        """INSERT INTO tracking_events (email_sent_id, event_type, metadata)
-           VALUES (?, ?, ?)""",
-        (evt.email_sent_id, evt.event_type, evt.metadata),
-    )
-    await db.commit()
-    if cursor.lastrowid is None:
-        raise RuntimeError("Failed to log tracking event: no lastrowid")
-    return cursor.lastrowid
+    result = await TrackingEvent.insert(
+        TrackingEvent(
+            email_sent_id=evt.email_sent_id,
+            event_type=evt.event_type,
+            metadata=evt.metadata,
+        )
+    ).run()
+    return result[0]["id"]
 
 
 # ---------------------------------------------------------------------------
@@ -777,86 +719,91 @@ async def log_tracking_event(db: aiosqlite.Connection, evt: TrackingEvent) -> in
 # ---------------------------------------------------------------------------
 
 
-async def get_pipeline_stats(db: aiosqlite.Connection) -> dict:
+async def get_pipeline_stats(db: Any = None) -> dict:
     """Get deal pipeline counts by stage."""
-    cursor = await db.execute(
+    rows = await Deal.raw(
         "SELECT stage, COUNT(*) as cnt FROM deals GROUP BY stage ORDER BY stage"
-    )
-    rows = await cursor.fetchall()
-    return {row[0]: row[1] for row in rows}
+    ).run()
+    return {row["stage"]: row["cnt"] for row in rows}
 
 
-async def get_daily_stats(db: aiosqlite.Connection, days: int = 30) -> list[dict]:
+async def get_daily_stats(db: Any = None, days: int = 30) -> list[dict]:
     """Get email send stats per day for the last N days."""
-    cursor = await db.execute(
+    rows = await EmailSent.raw(
         """SELECT DATE(sent_at) as day, status, COUNT(*) as cnt
            FROM emails_sent
-           WHERE sent_at >= DATE('now', ?)
+           WHERE sent_at >= DATE('now', {})
            GROUP BY day, status
            ORDER BY day DESC""",
-        (f"-{days} days",),
-    )
-    cols = [d[0] for d in cursor.description]
-    rows = await cursor.fetchall()
-    return [dict(zip(cols, r, strict=False)) for r in rows]
+        f"-{days} days",
+    ).run()
+    return [dict(r) for r in rows]
 
 
-async def get_lead_stats(db: aiosqlite.Connection) -> dict:
+async def get_lead_stats(db: Any = None) -> dict:
     """Get lead counts grouped by email_status and source."""
     result: dict = {}
-    cursor = await db.execute("SELECT email_status, COUNT(*) FROM leads GROUP BY email_status")
-    result["by_status"] = {row[0]: row[1] for row in await cursor.fetchall()}
 
-    cursor = await db.execute(
-        "SELECT source, COUNT(*) FROM leads GROUP BY source ORDER BY COUNT(*) DESC"
-    )
-    result["by_source"] = {row[0]: row[1] for row in await cursor.fetchall()}
+    rows = await Lead.raw(
+        "SELECT email_status, COUNT(*) as cnt FROM leads GROUP BY email_status"
+    ).run()
+    result["by_status"] = {row["email_status"]: row["cnt"] for row in rows}
 
-    cursor = await db.execute(
-        "SELECT city, state, COUNT(*) FROM leads WHERE city != '' "
-        "GROUP BY city, state ORDER BY COUNT(*) DESC LIMIT 20"
-    )
-    result["by_city"] = {f"{row[0]}, {row[1]}": row[2] for row in await cursor.fetchall()}
+    rows = await Lead.raw(
+        "SELECT source, COUNT(*) as cnt FROM leads GROUP BY source ORDER BY cnt DESC"
+    ).run()
+    result["by_source"] = {row["source"]: row["cnt"] for row in rows}
 
-    cursor = await db.execute("SELECT COUNT(*) FROM leads")
-    total_row = await cursor.fetchone()
-    result["total"] = total_row[0] if total_row is not None else 0
+    rows = await Lead.raw(
+        """SELECT city, state, COUNT(*) as cnt FROM leads WHERE city != ''
+           GROUP BY city, state ORDER BY cnt DESC LIMIT 20"""
+    ).run()
+    result["by_city"] = {f"{row['city']}, {row['state']}": row["cnt"] for row in rows}
+
+    total = await Lead.count().run()
+    result["total"] = total
     return result
 
 
-async def tag_leads(db: aiosqlite.Connection, lead_ids: list[int], tag: str) -> int:
+async def tag_leads(db: Any = None, lead_ids: list[int] | None = None, tag: str = "") -> int:
     """Add a tag to multiple leads. Returns count updated."""
+    if lead_ids is None and db is not None and isinstance(db, list):
+        lead_ids = db
+        db = None
+
     count = 0
-    for lid in lead_ids:
-        cursor = await db.execute("SELECT tags FROM leads WHERE id = ?", (lid,))
-        row = await cursor.fetchone()
-        if row is None:
+    for lid in lead_ids or []:
+        rows = await Lead.select(Lead.tags).where(Lead.id == lid).run()
+        if not rows:
             continue
-        existing = row[0] or ""
+        existing = rows[0]["tags"] or ""
         tags_list = [t.strip() for t in existing.split(",") if t.strip()]
         if tag not in tags_list:
             tags_list.append(tag)
-            await db.execute("UPDATE leads SET tags = ? WHERE id = ?", (",".join(tags_list), lid))
+            await Lead.update({Lead.tags: ",".join(tags_list)}).where(Lead.id == lid).run()
             count += 1
-    await db.commit()
     return count
 
 
-async def deactivate_mailbox(db: aiosqlite.Connection, mailbox_id: int) -> bool:
-    cursor = await db.execute("UPDATE mailboxes SET is_active = 0 WHERE id = ?", (mailbox_id,))
-    await db.commit()
-    return cursor.rowcount > 0
+async def deactivate_mailbox(db: Any = None, mailbox_id: int = 0) -> bool:
+    if mailbox_id == 0 and db is not None and isinstance(db, int):
+        mailbox_id = db
+        db = None
+    await Mailbox.update({Mailbox.is_active: 0}).where(Mailbox.id == mailbox_id).run()
+    return True
 
 
-async def delete_campaign(db: aiosqlite.Connection, campaign_id: int) -> bool:
-    cursor = await db.execute("DELETE FROM campaigns WHERE id = ?", (campaign_id,))
-    await db.commit()
-    return cursor.rowcount > 0
+async def delete_campaign(db: Any = None, campaign_id: int = 0) -> bool:
+    if campaign_id == 0 and db is not None and isinstance(db, int):
+        campaign_id = db
+        db = None
+    await Campaign.delete().where(Campaign.id == campaign_id).run()
+    return True
 
 
 async def enroll_leads_by_filter(
-    db: aiosqlite.Connection,
-    campaign_id: int,
+    db: Any = None,
+    campaign_id: int = 0,
     *,
     city: str | None = None,
     state: str | None = None,
@@ -864,33 +811,32 @@ async def enroll_leads_by_filter(
     tag: str | None = None,
 ) -> int:
     """Enroll leads matching filters into a campaign. Returns count enrolled."""
-    q = "SELECT id FROM leads WHERE 1=1"
-    params: list = []
+    if campaign_id == 0 and db is not None and isinstance(db, int):
+        campaign_id = db
+        db = None
+
+    query = Lead.select(Lead.id)
     if city:
-        q += " AND city = ?"
-        params.append(city)
+        query = query.where(Lead.city == city)
     if state:
-        q += " AND state = ?"
-        params.append(state)
+        query = query.where(Lead.state == state)
     if email_status:
-        q += " AND email_status = ?"
-        params.append(email_status)
+        query = query.where(Lead.email_status == email_status)
     if tag:
-        q += " AND tags LIKE ?"
-        params.append(f"%{tag}%")
-    cursor = await db.execute(q, params)
-    rows = await cursor.fetchall()
+        query = query.where(Lead.tags.like(f"%{tag}%"))
+
+    rows = await query.run()
     count = 0
     for row in rows:
-        result = await enroll_lead(db, campaign_id, row[0])
+        result = await enroll_lead(campaign_id=campaign_id, lead_id=row["id"])
         if result:
             count += 1
     return count
 
 
-async def get_all_send_queues(db: aiosqlite.Connection, *, limit: int = 50) -> list[dict]:
+async def get_all_send_queues(db: Any = None, *, limit: int = 50) -> list[dict]:
     """Get send queue across all active campaigns."""
-    cursor = await db.execute(
+    rows = await CampaignLead.raw(
         """SELECT cl.id AS cl_id, cl.campaign_id, cl.lead_id, cl.current_step,
                   l.email, l.first_name, l.last_name, l.company, l.website,
                   l.city, l.state, l.job_title,
@@ -905,14 +851,13 @@ async def get_all_send_queues(db: aiosqlite.Connection, *, limit: int = 50) -> l
              AND c.status = 'active'
              AND l.email IS NOT NULL
              AND l.email_status IN ('valid', 'catch_all', 'unknown')
-             AND (cl.next_send_at IS NULL OR cl.next_send_at <= ?)
+             AND (cl.next_send_at IS NULL OR cl.next_send_at <= {})
            ORDER BY cl.id
-           LIMIT ?""",
-        (_now(), limit),
-    )
-    cols = [d[0] for d in cursor.description]
-    rows = await cursor.fetchall()
-    return [dict(zip(cols, r, strict=False)) for r in rows]
+           LIMIT {}""",
+        _now(),
+        limit,
+    ).run()
+    return [dict(r) for r in rows]
 
 
 def get_warmup_limit(warmup_day: int) -> int:
@@ -928,70 +873,79 @@ def get_warmup_limit(warmup_day: int) -> int:
     return min(40 + (warmup_day - 22), 50)
 
 
-async def get_deal_stats(db: aiosqlite.Connection) -> dict:
+async def get_deal_stats(db: Any = None) -> dict:
     """Get deal pipeline stats."""
-    cursor = await db.execute(
-        "SELECT stage, COUNT(*), SUM(value) FROM deals GROUP BY stage ORDER BY stage"
-    )
-    rows = await cursor.fetchall()
+    rows = await Deal.raw(
+        "SELECT stage, COUNT(*) as count, SUM(value) as total_value FROM deals GROUP BY stage ORDER BY stage"
+    ).run()
     stages = {}
     for row in rows:
-        stages[row[0]] = {"count": row[1], "value": row[2] or 0.0}
+        stages[row["stage"]] = {"count": row["count"], "value": row["total_value"] or 0.0}
     total_pipeline = sum(s["value"] for s in stages.values())
     total_closed = stages.get("closed_won", {}).get("value", 0.0)
     return {"stages": stages, "pipeline_value": total_pipeline, "closed_value": total_closed}
 
 
-async def get_today_activity(db: aiosqlite.Connection) -> dict:
+async def get_today_activity(db: Any = None) -> dict:
     """Get today's email activity summary."""
     today = datetime.now(UTC).strftime("%Y-%m-%d")
-    cursor = await db.execute(
+    rows = await EmailSent.raw(
         """SELECT
                COUNT(*) as sent,
                SUM(CASE WHEN status = 'replied' THEN 1 ELSE 0 END) as replies,
                SUM(CASE WHEN status = 'bounced' THEN 1 ELSE 0 END) as bounces
-           FROM emails_sent WHERE DATE(sent_at) = ?""",
-        (today,),
-    )
-    row = await cursor.fetchone()
-    if row is None:
+           FROM emails_sent WHERE DATE(sent_at) = {}""",
+        today,
+    ).run()
+    if not rows:
         return {"sent": 0, "replies": 0, "bounces": 0}
-    return {"sent": row[0] or 0, "replies": row[1] or 0, "bounces": row[2] or 0}
+    row = rows[0]
+    return {
+        "sent": row["sent"] or 0,
+        "replies": row["replies"] or 0,
+        "bounces": row["bounces"] or 0,
+    }
 
 
-async def get_email_status_distribution(db: aiosqlite.Connection) -> dict[str, int]:
+async def get_email_status_distribution(db: Any = None) -> dict[str, int]:
     """Get count of emails by status."""
-    cursor = await db.execute(
-        "SELECT status, COUNT(*) FROM emails_sent GROUP BY status"
-    )
-    rows = await cursor.fetchall()
-    return {row[0]: row[1] for row in rows}
+    rows = await EmailSent.raw(
+        "SELECT status, COUNT(*) as cnt FROM emails_sent GROUP BY status"
+    ).run()
+    return {row["status"]: row["cnt"] for row in rows}
 
 
 async def get_campaign_step_distribution(
-    db: aiosqlite.Connection, campaign_id: int
+    db: Any = None, campaign_id: int = 0
 ) -> dict[int, dict[str, int]]:
     """Get lead counts by step and status for a campaign."""
-    cursor = await db.execute(
-        """SELECT current_step, status, COUNT(*)
+    if campaign_id == 0 and db is not None and isinstance(db, int):
+        campaign_id = db
+        db = None
+
+    rows = await CampaignLead.raw(
+        """SELECT current_step, status, COUNT(*) as cnt
            FROM campaign_leads
-           WHERE campaign_id = ?
+           WHERE campaign_id = {}
            GROUP BY current_step, status""",
-        (campaign_id,),
-    )
-    rows = await cursor.fetchall()
+        campaign_id,
+    ).run()
     result: dict[int, dict[str, int]] = {}
     for row in rows:
-        step, status, cnt = row[0], row[1], row[2]
+        step, status, cnt = row["current_step"], row["status"], row["cnt"]
         if step not in result:
             result[step] = {}
         result[step][status] = cnt
     return result
 
 
-async def get_campaign_stats(db: aiosqlite.Connection, campaign_id: int) -> dict:
+async def get_campaign_stats(db: Any = None, campaign_id: int = 0) -> dict:
     """Get stats for a specific campaign."""
-    cursor = await db.execute(
+    if campaign_id == 0 and db is not None and isinstance(db, int):
+        campaign_id = db
+        db = None
+
+    rows = await CampaignLead.raw(
         """SELECT
                COUNT(*) as total,
                SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active,
@@ -1000,136 +954,148 @@ async def get_campaign_stats(db: aiosqlite.Connection, campaign_id: int) -> dict
                SUM(CASE WHEN status = 'unsubscribed' THEN 1 ELSE 0 END) as unsubscribed,
                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
                SUM(CASE WHEN status = 'paused' THEN 1 ELSE 0 END) as paused
-           FROM campaign_leads WHERE campaign_id = ?""",
-        (campaign_id,),
-    )
-    row = await cursor.fetchone()
-    if row is None:
+           FROM campaign_leads WHERE campaign_id = {}""",
+        campaign_id,
+    ).run()
+    if not rows:
         return {}
-    cols = [d[0] for d in cursor.description]
-    return dict(zip(cols, row, strict=False))
+    return dict(rows[0])
 
 
 # ---------------------------------------------------------------------------
 # Users & Sessions (auth)
 # ---------------------------------------------------------------------------
 
-_USER_COLS = [
-    "id",
-    "username",
-    "webauthn_credential_id",
-    "webauthn_public_key",
-    "webauthn_sign_count",
-    "onboarding_completed",
-    "created_at",
-]
 
-_SESSION_COLS = ["id", "token", "user_id", "created_at", "expires_at"]
+async def get_user_count(db: Any = None) -> int:
+    return await User.count().run()
 
 
-async def get_user_count(db: aiosqlite.Connection) -> int:
-    cursor = await db.execute("SELECT COUNT(*) FROM users")
-    row = await cursor.fetchone()
-    return row[0] if row else 0
-
-
-async def get_user_by_id(db: aiosqlite.Connection, user_id: int) -> User | None:
-    cursor = await db.execute("SELECT * FROM users WHERE id = ?", (user_id,))
-    row = await cursor.fetchone()
-    if row is None:
+async def get_user_by_id(db: Any = None, user_id: int = 0) -> User | None:
+    if user_id == 0 and db is not None and isinstance(db, int):
+        user_id = db
+        db = None
+    rows = await User.select().where(User.id == user_id).run()
+    if not rows:
         return None
-    return _row_to_struct(row, User, _USER_COLS)
+    return User(**rows[0])
 
 
-async def get_user_by_username(db: aiosqlite.Connection, username: str) -> User | None:
-    cursor = await db.execute("SELECT * FROM users WHERE username = ?", (username,))
-    row = await cursor.fetchone()
-    if row is None:
+async def get_user_by_username(db: Any = None, username: str = "") -> User | None:
+    if username == "" and db is not None and isinstance(db, str):
+        username = db
+        db = None
+    rows = await User.select().where(User.username == username).run()
+    if not rows:
         return None
-    return _row_to_struct(row, User, _USER_COLS)
+    return User(**rows[0])
 
 
-async def create_user(db: aiosqlite.Connection, user: User) -> int:
-    cursor = await db.execute(
-        """INSERT INTO users (username, webauthn_credential_id, webauthn_public_key,
-                              webauthn_sign_count, onboarding_completed)
-           VALUES (?, ?, ?, ?, ?)""",
-        (
-            user.username,
-            user.webauthn_credential_id,
-            user.webauthn_public_key,
-            user.webauthn_sign_count,
-            user.onboarding_completed,
-        ),
-    )
-    await db.commit()
-    if cursor.lastrowid is None:
-        raise RuntimeError("Failed to create user: no lastrowid")
-    return cursor.lastrowid
+async def create_user(db: Any = None, user: Any = None, **kw) -> int:
+    if user is None and db is not None and hasattr(db, "username"):
+        user = db
+        db = None
+
+    result = await User.insert(
+        User(
+            username=user.username,
+            webauthn_credential_id=user.webauthn_credential_id,
+            webauthn_public_key=user.webauthn_public_key,
+            webauthn_sign_count=user.webauthn_sign_count,
+            onboarding_completed=user.onboarding_completed,
+        )
+    ).run()
+    return result[0]["id"]
 
 
 async def update_user_credential(
-    db: aiosqlite.Connection,
-    user_id: int,
+    db: Any = None,
+    user_id: int = 0,
     *,
     credential_id: str,
     public_key: str,
     sign_count: int,
 ) -> None:
-    await db.execute(
-        """UPDATE users SET webauthn_credential_id = ?, webauthn_public_key = ?,
-                            webauthn_sign_count = ? WHERE id = ?""",
-        (credential_id, public_key, sign_count, user_id),
+    if user_id == 0 and db is not None and isinstance(db, int):
+        user_id = db
+        db = None
+    await (
+        User.update(
+            {
+                User.webauthn_credential_id: credential_id,
+                User.webauthn_public_key: public_key,
+                User.webauthn_sign_count: sign_count,
+            }
+        )
+        .where(User.id == user_id)
+        .run()
     )
-    await db.commit()
 
 
-async def update_user_sign_count(
-    db: aiosqlite.Connection, user_id: int, sign_count: int
-) -> None:
-    await db.execute(
-        "UPDATE users SET webauthn_sign_count = ? WHERE id = ?",
-        (sign_count, user_id),
+async def update_user_sign_count(db: Any = None, user_id: int = 0, sign_count: int = 0) -> None:
+    if user_id == 0 and db is not None and isinstance(db, int):
+        user_id = db
+        db = None
+        sign_count = sign_count or 0
+    await (
+        User.update(
+            {
+                User.webauthn_sign_count: sign_count,
+            }
+        )
+        .where(User.id == user_id)
+        .run()
     )
-    await db.commit()
 
 
-async def set_onboarding_completed(db: aiosqlite.Connection, user_id: int) -> None:
-    await db.execute(
-        "UPDATE users SET onboarding_completed = 1 WHERE id = ?", (user_id,)
+async def set_onboarding_completed(db: Any = None, user_id: int = 0) -> None:
+    if user_id == 0 and db is not None and isinstance(db, int):
+        user_id = db
+        db = None
+    await (
+        User.update(
+            {
+                User.onboarding_completed: 1,
+            }
+        )
+        .where(User.id == user_id)
+        .run()
     )
-    await db.commit()
 
 
 async def create_session(
-    db: aiosqlite.Connection, token: str, user_id: int, expires_at: str
+    db: Any = None, token: str = "", user_id: int = 0, expires_at: str = ""
 ) -> int:
-    cursor = await db.execute(
-        "INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)",
-        (token, user_id, expires_at),
-    )
-    await db.commit()
-    if cursor.lastrowid is None:
-        raise RuntimeError("Failed to create session: no lastrowid")
-    return cursor.lastrowid
+    if token == "" and db is not None and isinstance(db, str):
+        token = db
+        db = None
+
+    result = await Session.insert(
+        Session(token=token, user_id=user_id, expires_at=expires_at)
+    ).run()
+    return result[0]["id"]
 
 
-async def get_session_by_token(db: aiosqlite.Connection, token: str) -> Session | None:
-    cursor = await db.execute("SELECT * FROM sessions WHERE token = ?", (token,))
-    row = await cursor.fetchone()
-    if row is None:
+async def get_session_by_token(db: Any = None, token: str = "") -> Session | None:
+    if token == "" and db is not None and isinstance(db, str):
+        token = db
+        db = None
+    rows = await Session.select().where(Session.token == token).run()
+    if not rows:
         return None
-    return _row_to_struct(row, Session, _SESSION_COLS)
+    return Session(**rows[0])
 
 
-async def delete_session(db: aiosqlite.Connection, token: str) -> None:
-    await db.execute("DELETE FROM sessions WHERE token = ?", (token,))
-    await db.commit()
+async def delete_session(db: Any = None, token: str = "") -> None:
+    if token == "" and db is not None and isinstance(db, str):
+        token = db
+        db = None
+    await Session.delete().where(Session.token == token).run()
 
 
-async def cleanup_expired_sessions(db: aiosqlite.Connection) -> int:
-    cursor = await db.execute(
-        "DELETE FROM sessions WHERE expires_at < ?", (_now(),)
-    )
-    await db.commit()
-    return cursor.rowcount
+async def cleanup_expired_sessions(db: Any = None) -> int:
+    rows = await Session.raw(
+        "DELETE FROM sessions WHERE expires_at < {} RETURNING id",
+        _now(),
+    ).run()
+    return len(rows)

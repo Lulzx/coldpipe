@@ -1,14 +1,8 @@
 {% extends "base.html" %}
+{% from "_macros/components.html" import status_badge, page_header, filter_select, empty_state %}
 {% block title %}Emails - Coldpipe{% endblock %}
 {% block content %}
-<div class="page-header d-print-none mb-3">
-  <div class="row align-items-center">
-    <div class="col">
-      <h2 class="page-title">Sent Emails</h2>
-      <div class="text-muted mt-1">{{ total }} email{{ 's' if total != 1 }}</div>
-    </div>
-  </div>
-</div>
+{{ page_header("Sent Emails", total ~ " email" ~ ("s" if total != 1 else "")) }}
 
 {% if email_dist %}
 <div class="card mb-3">
@@ -33,14 +27,7 @@
 
 <div class="card mb-3">
   <div class="card-body">
-    <form method="get" action="/emails" class="d-flex gap-2">
-      <select name="status" class="form-select" style="max-width: 200px;" onchange="this.form.submit()">
-        <option value="">All statuses</option>
-        {% for s in ['sent', 'delivered', 'replied', 'bounced', 'failed'] %}
-        <option value="{{ s }}"{% if status == s %} selected{% endif %}>{{ s|capitalize }}</option>
-        {% endfor %}
-      </select>
-    </form>
+    {{ filter_select("status", ['sent', 'delivered', 'replied', 'bounced', 'failed'], status, "All statuses", "/emails") }}
   </div>
 </div>
 
@@ -62,35 +49,13 @@
         <tr>
           <td>{{ e.to_email }}</td>
           <td>{{ e.subject }}</td>
-          <td>
-            {% if e.status == 'sent' or e.status == 'delivered' %}
-            <span class="badge bg-blue-lt">{{ e.status }}</span>
-            {% elif e.status == 'replied' %}
-            <span class="badge bg-green-lt">replied</span>
-            {% elif e.status == 'bounced' %}
-            <span class="badge bg-red-lt">bounced</span>
-            {% elif e.status == 'failed' %}
-            <span class="badge bg-orange-lt">failed</span>
-            {% else %}
-            <span class="badge bg-secondary-lt">{{ e.status }}</span>
-            {% endif %}
-          </td>
+          <td>{{ status_badge(e.status) }}</td>
           <td>{{ e.campaign_id or '-' }}</td>
           <td>{{ e.step_number }}</td>
           <td>{{ e.sent_at or '-' }}</td>
         </tr>
         {% else %}
-        <tr>
-          <td colspan="6">
-            <div class="empty py-4">
-              <div class="empty-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-lg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z"/><path d="M3 7l9 6l9 -6"/></svg>
-              </div>
-              <p class="empty-title">No emails sent yet</p>
-              <p class="empty-subtitle text-muted">Start a campaign to begin sending emails.</p>
-            </div>
-          </td>
-        </tr>
+        {{ empty_state("No emails sent yet", "Start a campaign to begin sending emails.", 6, '<svg xmlns="http://www.w3.org/2000/svg" class="icon icon-lg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z"/><path d="M3 7l9 6l9 -6"/></svg>') }}
         {% endfor %}
       </tbody>
     </table>

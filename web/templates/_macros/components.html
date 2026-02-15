@@ -1,0 +1,86 @@
+{# Reusable UI macros for Coldpipe templates #}
+
+{#
+  status_badge(value, context)
+  Renders a color-coded Tabler badge based on value and optional context.
+  context: "lead", "campaign", "email", "deal" (default auto-detect)
+#}
+{% macro status_badge(value, context="") %}
+{%- if value in ('valid', 'active', 'delivered', 'closed_won') -%}
+<span class="badge bg-green-lt">{{ value|replace('_', ' ') }}</span>
+{%- elif value in ('invalid', 'bounced', 'closed_lost') -%}
+<span class="badge bg-red-lt">{{ value|replace('_', ' ') }}</span>
+{%- elif value in ('catch_all', 'paused') -%}
+<span class="badge bg-yellow-lt">{{ value|replace('_', ' ') }}</span>
+{%- elif value in ('risky', 'failed') -%}
+<span class="badge bg-orange-lt">{{ value|replace('_', ' ') }}</span>
+{%- elif value in ('replied', 'interested', 'meeting_booked', 'completed') -%}
+<span class="badge bg-blue-lt">{{ value|replace('_', ' ') }}</span>
+{%- elif value in ('sent',) -%}
+<span class="badge bg-blue-lt">{{ value }}</span>
+{%- else -%}
+<span class="badge bg-secondary-lt">{{ value|replace('_', ' ') }}</span>
+{%- endif -%}
+{% endmacro %}
+
+{#
+  page_header(title, subtitle, caller)
+  Renders a consistent page header with optional subtitle and action slot.
+  Use with {% call page_header("Title", "subtitle") %}...actions...{% endcall %}
+  or without call for no actions: {{ page_header("Title", "subtitle") }}
+#}
+{% macro page_header(title, subtitle="") %}
+<div class="page-header d-print-none mb-3">
+  <div class="row align-items-center">
+    <div class="col">
+      <h2 class="page-title">{{ title }}</h2>
+      {% if subtitle %}
+      <div class="text-muted mt-1">{{ subtitle }}</div>
+      {% endif %}
+    </div>
+    {% if caller %}
+    <div class="col-auto">
+      {{ caller() }}
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endmacro %}
+
+{#
+  filter_select(name, options, selected, label, action)
+  Renders a dropdown filter that auto-submits on change.
+  options: list of value strings
+  selected: currently selected value
+#}
+{% macro filter_select(name, options, selected, label="All", action="", style="max-width: 200px;") %}
+<form method="get"{% if action %} action="{{ action }}"{% endif %} class="d-flex gap-2">
+  <select name="{{ name }}" class="form-select"{% if style %} style="{{ style }}"{% endif %} onchange="this.form.submit()">
+    <option value="">{{ label }}</option>
+    {% for opt in options %}
+    <option value="{{ opt }}"{% if selected == opt %} selected{% endif %}>{{ opt|replace('_', ' ')|title }}</option>
+    {% endfor %}
+  </select>
+</form>
+{% endmacro %}
+
+{#
+  empty_state(icon_svg, title, subtitle, colspan)
+  Renders a table empty state row.
+  icon_svg: raw SVG string for the icon
+#}
+{% macro empty_state(title, subtitle, colspan=6, icon_svg="") %}
+<tr>
+  <td colspan="{{ colspan }}">
+    <div class="empty py-4">
+      {% if icon_svg %}
+      <div class="empty-icon">
+        {{ icon_svg }}
+      </div>
+      {% endif %}
+      <p class="empty-title">{{ title }}</p>
+      <p class="empty-subtitle text-muted">{{ subtitle }}</p>
+    </div>
+  </td>
+</tr>
+{% endmacro %}

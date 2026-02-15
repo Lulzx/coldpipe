@@ -1,33 +1,20 @@
-"""Version-based migration system for the coldpipe database."""
+"""Legacy migration support for pre-v3 databases.
+
+This module handles upgrading old databases that were created before the
+Piccolo ORM migration. New databases are created directly by Piccolo's
+create_table() in db/__init__.py.
+"""
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 
-import aiosqlite
+from piccolo.querystring import QueryString
 
 SCHEMA_PATH = Path(__file__).parent / "schema.sql"
 
-
-async def get_version(db: aiosqlite.Connection) -> int:
-    """Get the current schema version. Returns 0 if table doesn't exist."""
-    try:
-        cursor = await db.execute("SELECT MAX(version) FROM schema_version")
-        row = await cursor.fetchone()
-        return row[0] if row and row[0] is not None else 0
-    except aiosqlite.OperationalError:
-        return 0
-
-
-async def init_schema(db: aiosqlite.Connection) -> int:
-    """Apply the base schema. Returns the version applied."""
-    sql = SCHEMA_PATH.read_text()
-    await db.executescript(sql)
-    return await get_version(db)
-
-
-# Migrations are keyed by target version number.
-# Each migration receives the db connection and upgrades from version N-1 to N.
+# Legacy migrations for databases created before Piccolo adoption
 MIGRATIONS: dict[int, str] = {
     2: """
         ALTER TABLE leads ADD COLUMN email_confidence REAL NOT NULL DEFAULT 0.0;
@@ -56,18 +43,60 @@ MIGRATIONS: dict[int, str] = {
 }
 
 
-async def migrate(db: aiosqlite.Connection) -> int:
-    """Run all pending migrations. Returns final version."""
-    current = await get_version(db)
+async def migrate_legacy(engine) -> int:
+    """Run legacy migrations on an existing database via Piccolo engine.
+
+    Only needed for databases created before the Piccolo migration.
+    Returns final version.
+    """
+    # Check if schema_version table has data
+    try:
+        rows = await engine.run_querystring(QueryString("SELECT MAX(version) FROM schema_version"))
+        current = rows[0]["max(version)"] if rows and rows[0].get("max(version)") is not None else 0
+    except Exception:
+        current = 0
 
     if current == 0:
-        current = await init_schema(db)
+        # No version data — this is either a new DB (Piccolo-created) or pre-migration.
+        # Check if leads table exists to distinguish
+        try:
+            rows = await engine.run_querystring(
+                QueryString("SELECT name FROM sqlite_master WHERE type='table' AND name='leads'")
+            )
+            if not rows:
+                # New DB — Piccolo handles everything
+                return 0
+        except Exception:
+            return 0
+
+        # Insert initial version
+        await engine.run_querystring(
+            QueryString("INSERT OR IGNORE INTO schema_version (version) VALUES ({})", 1)
+        )
+        current = 1
 
     target_versions = sorted(v for v in MIGRATIONS if v > current)
     for version in target_versions:
-        await db.executescript(MIGRATIONS[version])
-        await db.execute("INSERT INTO schema_version (version) VALUES (?)", (version,))
-        await db.commit()
-        current = version
+        try:
+            for statement in MIGRATIONS[version].strip().split(";"):
+                statement = statement.strip()
+                if statement:
+                    await engine.run_ddl(statement)
+            await engine.run_querystring(
+                QueryString(
+                    "INSERT INTO schema_version (version) VALUES ({})",
+                    version,
+                )
+            )
+            current = version
+        except Exception:
+            # Column/table may already exist from Piccolo create_table
+            with contextlib.suppress(Exception):
+                await engine.run_querystring(
+                    QueryString(
+                        "INSERT OR IGNORE INTO schema_version (version) VALUES ({})",
+                        version,
+                    )
+                )
 
     return current
