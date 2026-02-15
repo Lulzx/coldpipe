@@ -102,7 +102,7 @@ class AuthController(Controller):
                 credential=body,
                 expected_challenge=base64url_to_bytes(challenge_data["challenge"]),
                 expected_rp_id=settings.web.rp_id,
-                expected_origin=f"{request.scheme}://{request.headers.get('host', 'localhost')}",
+                expected_origin=f"{request.scope['scheme']}://{request.headers.get('host', 'localhost')}",
             )
         except Exception as exc:
             log.warning("WebAuthn registration failed: %s", exc)
@@ -230,7 +230,7 @@ class AuthController(Controller):
                 credential=body,
                 expected_challenge=base64url_to_bytes(challenge_data["challenge"]),
                 expected_rp_id=settings.web.rp_id,
-                expected_origin=f"{request.scheme}://{request.headers.get('host', 'localhost')}",
+                expected_origin=f"{request.scope['scheme']}://{request.headers.get('host', 'localhost')}",
                 credential_public_key=base64.urlsafe_b64decode(public_key_b64 + "=="),
                 credential_current_sign_count=sign_count,
             )

@@ -41,7 +41,7 @@ async def lifespan(app: Litestar):
     await close_db()
 
 
-async def handle_404(request: Request, exc: Exception) -> Template:
+def handle_404(request: Request, exc: Exception) -> Template:
     return Template(
         template_name="errors/404.html",
         context={"active_page": "", "csrf_token": "", "current_user": None},
@@ -49,7 +49,7 @@ async def handle_404(request: Request, exc: Exception) -> Template:
     )
 
 
-async def handle_500(request: Request, exc: Exception) -> Template:
+def handle_500(request: Request, exc: Exception) -> Template:
     log.exception("Unhandled error for %s %s", request.method, request.url)
     return Template(
         template_name="errors/500.html",
