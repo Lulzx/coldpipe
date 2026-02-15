@@ -22,14 +22,14 @@ EXEMPT_PREFIXES = ("/auth/",)
 
 async def _redirect(scope: Scope, receive: Receive, send: Send, path: str) -> None:
     """Send a raw ASGI 302 redirect (works inside middleware)."""
-    await send(
+    await send(  # type: ignore[arg-type]
         {
             "type": "http.response.start",
             "status": 302,
             "headers": [(b"location", path.encode())],
         }
     )
-    await send({"type": "http.response.body", "body": b""})
+    await send({"type": "http.response.body", "body": b""})  # type: ignore[arg-type]
 
 
 def _now_iso() -> str:
