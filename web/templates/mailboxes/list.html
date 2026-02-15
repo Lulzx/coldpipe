@@ -26,6 +26,7 @@
         </tr>
       </thead>
       <tbody>
+        {% block table_body %}
         {% for mb in mailboxes %}
         {% set u = usage.get(mb.id, {'sent': 0, 'limit': mb.daily_limit}) %}
         {% set pct = (u.sent / u.limit * 100) if u.limit > 0 else 0 %}
@@ -73,6 +74,7 @@
           </td>
         </tr>
         {% endfor %}
+        {% endblock %}
       </tbody>
     </table>
   </div>
