@@ -15,13 +15,32 @@ Usage:
 
 from __future__ import annotations
 
+import logging
+import warnings
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
 
 from piccolo.engine.sqlite import SQLiteEngine
 
 from .tables import _POST_CREATE_SQL
+
+_POOL_MSG = "Connection pooling is not supported"
+
+
+@contextmanager
+def _suppress_pool_warning():
+    """Suppress Piccolo's SQLite connection pool warning (logger + warnings)."""
+    piccolo_logger = logging.getLogger("piccolo.engine.base")
+    orig_level = piccolo_logger.level
+    piccolo_logger.setLevel(logging.ERROR)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", ".*Connection pooling.*")
+        try:
+            yield
+        finally:
+            piccolo_logger.setLevel(orig_level)
+
 
 DB_PATH = Path(__file__).resolve().parent.parent / "data" / "coldpipe.db"
 
@@ -36,7 +55,6 @@ async def init_db(db_path: str | Path | None = None) -> SQLiteEngine:
     path.parent.mkdir(parents=True, exist_ok=True)
 
     _engine = SQLiteEngine(path=str(path))
-    await _engine.start_connection_pool()
 
     # Set pragmas
     await _engine.run_ddl("PRAGMA journal_mode = WAL")
@@ -78,8 +96,27 @@ async def init_db(db_path: str | Path | None = None) -> SQLiteEngine:
     for table_cls in tables:
         table_cls._meta._db = _engine
 
+    # Migrate old schema_version table (lacks id column Piccolo expects)
+    try:
+        cols = await _engine.run_ddl("PRAGMA table_info(schema_version)")
+        col_names = [c["name"] for c in cols] if cols else []
+        if col_names and "id" not in col_names:
+            await _engine.run_ddl("ALTER TABLE schema_version RENAME TO _schema_version_old")
+    except Exception:
+        pass
+
     for table_cls in tables:
         await table_cls.create_table(if_not_exists=True).run()
+
+    # Carry over legacy schema_version rows then drop old table
+    try:
+        await _engine.run_ddl(
+            "INSERT INTO schema_version (version, applied_at) "
+            "SELECT DISTINCT version, MIN(applied_at) FROM _schema_version_old GROUP BY version"
+        )
+        await _engine.run_ddl("DROP TABLE _schema_version_old")
+    except Exception:
+        pass
 
     # Apply post-creation SQL (indexes, triggers)
     for sql in _POST_CREATE_SQL:
@@ -102,10 +139,11 @@ async def init_db(db_path: str | Path | None = None) -> SQLiteEngine:
 
 
 async def close_db() -> None:
-    """Close the Piccolo engine connection pool."""
+    """Close the Piccolo engine."""
     global _engine
     if _engine is not None:
-        await _engine.close_connection_pool()
+        with _suppress_pool_warning():
+            await _engine.close_connection_pool()
         _engine = None
 
 

@@ -5,7 +5,6 @@ from __future__ import annotations
 import secrets
 
 from litestar.middleware import AbstractMiddleware
-from litestar.response import Redirect
 from litestar.types import Receive, Scope, Send
 
 from db.queries import (
@@ -19,6 +18,18 @@ SESSION_COOKIE = "coldpipe_session"
 SESSION_DURATION_HOURS = 24 * 7
 
 EXEMPT_PREFIXES = ("/auth/",)
+
+
+async def _redirect(scope: Scope, receive: Receive, send: Send, path: str) -> None:
+    """Send a raw ASGI 302 redirect (works inside middleware)."""
+    await send(
+        {
+            "type": "http.response.start",
+            "status": 302,
+            "headers": [(b"location", path.encode())],
+        }
+    )
+    await send({"type": "http.response.body", "body": b""})
 
 
 def _now_iso() -> str:
@@ -61,8 +72,7 @@ class AuthMiddleware(AbstractMiddleware):
         # No users - redirect to registration
         if user_count == 0:
             if path != "/auth/register":
-                response = Redirect(path="/auth/register")
-                await response(scope, receive, send)
+                await _redirect(scope, receive, send, "/auth/register")
                 return
             await self.app(scope, receive, send)
             return
@@ -79,27 +89,23 @@ class AuthMiddleware(AbstractMiddleware):
                 break
 
         if not session_token:
-            response = Redirect(path="/auth/login")
-            await response(scope, receive, send)
+            await _redirect(scope, receive, send, "/auth/login")
             return
 
         session = await get_session_by_token(token=session_token)
         if session is None:
-            response = Redirect(path="/auth/login")
-            await response(scope, receive, send)
+            await _redirect(scope, receive, send, "/auth/login")
             return
 
         # Check expiry
         if session.expires_at < _now_iso():
             await delete_session(token=session_token)
-            response = Redirect(path="/auth/login")
-            await response(scope, receive, send)
+            await _redirect(scope, receive, send, "/auth/login")
             return
 
         user = await get_user_by_id(user_id=session.user_id)
         if user is None:
-            response = Redirect(path="/auth/login")
-            await response(scope, receive, send)
+            await _redirect(scope, receive, send, "/auth/login")
             return
 
         # Store user and session in scope
@@ -115,8 +121,7 @@ class AuthMiddleware(AbstractMiddleware):
 
         # Check onboarding
         if not user.onboarding_completed and not path.startswith("/onboarding"):
-            response = Redirect(path="/onboarding")
-            await response(scope, receive, send)
+            await _redirect(scope, receive, send, "/onboarding")
             return
 
         await self.app(scope, receive, send)
