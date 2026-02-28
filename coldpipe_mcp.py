@@ -80,7 +80,7 @@ async def _logged(tool_name: str, params: dict, coro):
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool
 async def scrape_google_maps(city: str, query: str = "businesses", max_results: int = 20) -> str:
     """Scrape business leads from Google Maps for a given city and query."""
     from scrapers.google_maps import GoogleMapsScraper
@@ -99,7 +99,7 @@ async def scrape_google_maps(city: str, query: str = "businesses", max_results: 
     return await _logged("scrape_google_maps", {"city": city, "query": query, "max_results": max_results}, _work())
 
 
-@mcp.tool()
+@mcp.tool
 async def scrape_exa(query: str, city: str = "", max_results: int = 20) -> str:
     """Search for business websites using Exa.ai and save leads to DB."""
     from scrapers.exa_search import ExaScraper
@@ -118,7 +118,7 @@ async def scrape_exa(query: str, city: str = "", max_results: int = 20) -> str:
     return await _logged("scrape_exa", {"query": query, "city": city, "max_results": max_results}, _work())
 
 
-@mcp.tool()
+@mcp.tool
 async def enrich_websites(limit: int = 50, lead_ids: list[int] | None = None) -> str:
     """Crawl lead websites to extract emails, phones, and contact info."""
     from scrapers.website_enricher import WebsiteEnricher
@@ -135,7 +135,7 @@ async def enrich_websites(limit: int = 50, lead_ids: list[int] | None = None) ->
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool
 async def get_leads_tool(
     limit: int = 50,
     offset: int = 0,
@@ -163,7 +163,7 @@ async def get_leads_tool(
     return await _logged("get_leads", {"limit": limit, "offset": offset, "email_status": email_status, "source": source}, _work())
 
 
-@mcp.tool()
+@mcp.tool
 async def get_lead(lead_id: int) -> str:
     """Fetch a single lead by ID."""
     async def _work():
@@ -191,7 +191,7 @@ async def get_lead(lead_id: int) -> str:
     return await _logged("get_lead", {"lead_id": lead_id}, _work())
 
 
-@mcp.tool()
+@mcp.tool
 async def search_leads_tool(query: str, limit: int = 20) -> str:
     """Search leads by email, name, or company."""
     async def _work():
@@ -204,7 +204,7 @@ async def search_leads_tool(query: str, limit: int = 20) -> str:
     return await _logged("search_leads", {"query": query, "limit": limit}, _work())
 
 
-@mcp.tool()
+@mcp.tool
 async def save_lead(
     email: str,
     first_name: str = "",
@@ -239,7 +239,7 @@ async def save_lead(
     return await _logged("save_lead", {"email": email, "company": company}, _work())
 
 
-@mcp.tool()
+@mcp.tool
 async def tag_leads_tool(lead_ids: list[int], tag: str) -> str:
     """Add a tag to multiple leads."""
     async def _work():
@@ -249,7 +249,7 @@ async def tag_leads_tool(lead_ids: list[int], tag: str) -> str:
     return await _logged("tag_leads", {"lead_ids": lead_ids, "tag": tag}, _work())
 
 
-@mcp.tool()
+@mcp.tool
 async def count_leads_tool(email_status: str | None = None) -> str:
     """Count leads with optional email_status filter."""
     async def _work():
@@ -264,7 +264,7 @@ async def count_leads_tool(email_status: str | None = None) -> str:
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool
 async def validate_leads(lead_ids: list[int] | None = None, limit: int = 50) -> str:
     """Validate email addresses for leads (batch)."""
     from tools.validate import EmailValidator
@@ -301,7 +301,7 @@ async def validate_leads(lead_ids: list[int] | None = None, limit: int = 50) -> 
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool
 async def get_campaigns_tool(status: str | None = None) -> str:
     """Fetch all campaigns with optional status filter."""
     async def _work():
@@ -314,7 +314,7 @@ async def get_campaigns_tool(status: str | None = None) -> str:
     return await _logged("get_campaigns", {"status": status}, _work())
 
 
-@mcp.tool()
+@mcp.tool
 async def get_campaign(campaign_id: int) -> str:
     """Fetch a single campaign by ID with its stats."""
     async def _work():
@@ -335,7 +335,7 @@ async def get_campaign(campaign_id: int) -> str:
     return await _logged("get_campaign", {"campaign_id": campaign_id}, _work())
 
 
-@mcp.tool()
+@mcp.tool
 async def create_campaign_tool(
     name: str,
     mailbox_id: int,
@@ -359,7 +359,7 @@ async def create_campaign_tool(
     return await _logged("create_campaign", {"name": name, "mailbox_id": mailbox_id}, _work())
 
 
-@mcp.tool()
+@mcp.tool
 async def update_campaign_status_tool(campaign_id: int, status: str) -> str:
     """Update a campaign's status (draft|active|paused|completed|archived)."""
     async def _work():
@@ -369,7 +369,7 @@ async def update_campaign_status_tool(campaign_id: int, status: str) -> str:
     return await _logged("update_campaign_status", {"campaign_id": campaign_id, "status": status}, _work())
 
 
-@mcp.tool()
+@mcp.tool
 async def enroll_leads_in_campaign(campaign_id: int, lead_ids: list[int]) -> str:
     """Enroll multiple leads into a campaign."""
     async def _work():
@@ -383,7 +383,7 @@ async def enroll_leads_in_campaign(campaign_id: int, lead_ids: list[int]) -> str
     return await _logged("enroll_leads_in_campaign", {"campaign_id": campaign_id, "count": len(lead_ids)}, _work())
 
 
-@mcp.tool()
+@mcp.tool
 async def get_sequence_steps_tool(campaign_id: int) -> str:
     """Fetch sequence steps for a campaign."""
     async def _work():
@@ -403,7 +403,7 @@ async def get_sequence_steps_tool(campaign_id: int) -> str:
     return await _logged("get_sequence_steps", {"campaign_id": campaign_id}, _work())
 
 
-@mcp.tool()
+@mcp.tool
 async def add_sequence_step_tool(
     campaign_id: int,
     step_number: int,
@@ -436,7 +436,7 @@ async def add_sequence_step_tool(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool
 async def get_send_queue_tool(campaign_id: int, limit: int = 20) -> str:
     """Get leads ready for the next email in a campaign."""
     async def _work():
@@ -446,7 +446,7 @@ async def get_send_queue_tool(campaign_id: int, limit: int = 20) -> str:
     return await _logged("get_send_queue", {"campaign_id": campaign_id, "limit": limit}, _work())
 
 
-@mcp.tool()
+@mcp.tool
 async def check_replies(mailbox_id: int) -> str:
     """Check for email replies in a mailbox using IMAP."""
     from db.queries import get_mailbox_by_id
@@ -468,7 +468,7 @@ async def check_replies(mailbox_id: int) -> str:
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool
 async def get_deals_tool(stage: str | None = None) -> str:
     """Fetch deals with optional stage filter."""
     async def _work():
@@ -489,7 +489,7 @@ async def get_deals_tool(stage: str | None = None) -> str:
     return await _logged("get_deals", {"stage": stage}, _work())
 
 
-@mcp.tool()
+@mcp.tool
 async def save_deal(
     lead_id: int,
     campaign_id: int | None = None,
@@ -517,7 +517,7 @@ async def save_deal(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool
 async def get_dashboard_stats() -> str:
     """Get summary stats: leads, today's activity, and deals."""
     async def _work():
@@ -533,7 +533,7 @@ async def get_dashboard_stats() -> str:
     return await _logged("get_dashboard_stats", {}, _work())
 
 
-@mcp.tool()
+@mcp.tool
 async def get_campaign_stats_tool(campaign_id: int) -> str:
     """Get detailed stats for a specific campaign."""
     async def _work():
@@ -543,7 +543,7 @@ async def get_campaign_stats_tool(campaign_id: int) -> str:
     return await _logged("get_campaign_stats", {"campaign_id": campaign_id}, _work())
 
 
-@mcp.tool()
+@mcp.tool
 async def get_mcp_activity_tool(limit: int = 20) -> str:
     """Retrieve recent MCP tool call history (so Claude can see its own activity)."""
     async def _work():

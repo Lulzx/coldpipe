@@ -28,7 +28,7 @@ dependencies = [
     "piccolo[sqlite]~=1.30",
     "litestar[jinja,standard]~=2.15",
     "jinja2-fragments~=1.11",
-    "fastmcp~=2.0",
+    "fastmcp>=3.0,<4",
 ]
 
 [project.scripts]
