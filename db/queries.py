@@ -21,6 +21,7 @@ from .tables import (
     Lead,
     Mailbox,
     McpActivity,
+    McpNote,
     SequenceStep,
     Session,
     TrackingEvent,
@@ -1161,6 +1162,46 @@ async def get_mcp_activity(limit: int = 50, offset: int = 0) -> list[McpActivity
 
 async def count_mcp_activity() -> int:
     return await McpActivity.count().run()
+
+
+async def save_note(key: str, value: str) -> None:
+    """Save or update a persistent note by key."""
+    await McpNote.raw(
+        "INSERT INTO mcp_notes (key, value, updated_at) VALUES ({}, {}, {}) "
+        "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+        key,
+        value,
+        _now(),
+    ).run()
+
+
+async def get_note(key: str) -> str | None:
+    """Get a single note by exact key."""
+    rows = await McpNote.select(McpNote.value).where(McpNote.key == key).run()
+    return rows[0]["value"] if rows else None
+
+
+async def get_notes_by_prefix(prefix: str = "") -> list[dict]:
+    """Get all notes, optionally filtered by key prefix."""
+    if prefix:
+        escaped = _escape_like(prefix)
+        rows = await McpNote.raw(
+            "SELECT key, value, updated_at FROM mcp_notes WHERE key LIKE {} ESCAPE '\\' ORDER BY key",
+            f"{escaped}%",
+        ).run()
+    else:
+        rows = await McpNote.raw(
+            "SELECT key, value, updated_at FROM mcp_notes ORDER BY key"
+        ).run()
+    return [dict(r) for r in rows]
+
+
+async def delete_note(key: str) -> bool:
+    """Delete a note by key. Returns True if it existed."""
+    rows = await McpNote.raw(
+        "DELETE FROM mcp_notes WHERE key = {} RETURNING id", key
+    ).run()
+    return bool(rows)
 
 
 async def get_mcp_stats() -> dict:

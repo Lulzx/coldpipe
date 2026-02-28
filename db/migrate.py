@@ -53,6 +53,15 @@ MIGRATIONS: dict[int, str] = {
         );
         CREATE INDEX IF NOT EXISTS idx_mcp_created ON mcp_activity(created_at);
     """,
+    5: """
+        CREATE TABLE IF NOT EXISTS mcp_notes (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            key        TEXT NOT NULL UNIQUE,
+            value      TEXT NOT NULL DEFAULT '',
+            updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_notes_key ON mcp_notes(key);
+    """,
 }
 
 

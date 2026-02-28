@@ -48,7 +48,7 @@ async def test_schema_version(db):
 
     engine = get_engine()
     rows = await engine.run_ddl("SELECT MAX(version) as v FROM schema_version")
-    assert rows[0]["v"] >= 4
+    assert rows[0]["v"] >= 5
 
 
 # ---------------------------------------------------------------------------
