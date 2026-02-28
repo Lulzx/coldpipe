@@ -14,6 +14,8 @@ from db.queries import (
     get_deal_stats,
     get_lead_stats,
     get_mailboxes,
+    get_mcp_activity,
+    get_mcp_stats,
     get_pipeline_stats,
     get_today_activity,
     get_warmup_limit,
@@ -45,6 +47,8 @@ class DashboardController(Controller):
         campaigns = await get_campaigns(status="active")
         daily = await get_daily_stats(days=30)
         mailboxes = await get_mailboxes(active_only=True)
+        mcp_stats = await get_mcp_stats()
+        mcp_recent = await get_mcp_activity(limit=5)
 
         mailbox_warmup = []
         for mb in mailboxes:
@@ -88,5 +92,7 @@ class DashboardController(Controller):
                 chart_series=chart_series,
                 mailbox_warmup=mailbox_warmup,
                 stages=DEAL_STAGES,
+                mcp_stats=mcp_stats,
+                mcp_recent=mcp_recent,
             ),
         )

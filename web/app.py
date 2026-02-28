@@ -13,6 +13,7 @@ from litestar.template import TemplateConfig
 
 from db import close_db, init_db
 from db.queries import cleanup_expired_sessions
+from web.controllers.activity import ActivityController
 from web.controllers.auth import AuthController
 from web.controllers.campaigns import CampaignsController
 from web.controllers.dashboard import DashboardController
@@ -64,6 +65,7 @@ def create_app() -> Litestar:
 
     return Litestar(
         route_handlers=[
+            ActivityController,
             AuthController,
             OnboardingController,
             DashboardController,

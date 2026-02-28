@@ -159,6 +159,15 @@ def db_health():
 # ---------------------------------------------------------------------------
 
 
+@app.command("mcp")
+def mcp_start():
+    """Start the Coldpipe MCP server (for Claude Code integration)."""
+    import subprocess
+    import sys
+
+    subprocess.run([sys.executable, "coldpipe_mcp.py"])
+
+
 @app.command("web")
 def web_serve(
     host: str = typer.Option("127.0.0.1", help="Host to bind to"),

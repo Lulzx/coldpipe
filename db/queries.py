@@ -20,6 +20,7 @@ from .tables import (
     EmailSent,
     Lead,
     Mailbox,
+    McpActivity,
     SequenceStep,
     Session,
     TrackingEvent,
@@ -1099,3 +1100,87 @@ async def cleanup_expired_sessions(db: Any = None) -> int:
         _now(),
     ).run()
     return len(rows)
+
+
+# ---------------------------------------------------------------------------
+# MCP Activity logging
+# ---------------------------------------------------------------------------
+
+
+async def log_mcp_activity(
+    tool_name: str,
+    params: str = "",
+    result_summary: str = "",
+    status: str = "running",
+    error: str | None = None,
+    duration_ms: int = 0,
+) -> int:
+    """Insert an MCP activity row and return its id."""
+    result = await McpActivity.insert(
+        McpActivity(
+            tool_name=tool_name,
+            params=params,
+            result_summary=result_summary,
+            status=status,
+            error=error,
+            duration_ms=duration_ms,
+        )
+    ).run()
+    return result[0]["id"]
+
+
+async def update_mcp_activity(
+    row_id: int,
+    status: str,
+    result_summary: str = "",
+    duration_ms: int = 0,
+    error: str | None = None,
+) -> None:
+    """Update an existing MCP activity row after completion."""
+    updates: dict = {
+        McpActivity.status: status,
+        McpActivity.result_summary: result_summary,
+        McpActivity.duration_ms: duration_ms,
+    }
+    if error is not None:
+        updates[McpActivity.error] = error
+    await McpActivity.update(updates).where(McpActivity.id == row_id).run()
+
+
+async def get_mcp_activity(limit: int = 50, offset: int = 0) -> list[McpActivity]:
+    """Fetch MCP activity rows ordered by most recent first."""
+    rows = (
+        await McpActivity.select()
+        .order_by(McpActivity.created_at, ascending=False)
+        .limit(limit)
+        .offset(offset)
+        .run()
+    )
+    return [McpActivity(**r) for r in rows]
+
+
+async def count_mcp_activity() -> int:
+    return await McpActivity.count().run()
+
+
+async def get_mcp_stats() -> dict:
+    """Get MCP activity stats for the dashboard panel."""
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
+
+    total_rows = await McpActivity.raw(
+        "SELECT COUNT(*) as cnt FROM mcp_activity WHERE DATE(created_at) = {}",
+        today,
+    ).run()
+    total_today = total_rows[0]["cnt"] if total_rows else 0
+
+    tool_rows = await McpActivity.raw(
+        "SELECT tool_name, COUNT(*) as cnt FROM mcp_activity GROUP BY tool_name ORDER BY cnt DESC"
+    ).run()
+    by_tool = {r["tool_name"]: r["cnt"] for r in tool_rows}
+
+    status_rows = await McpActivity.raw(
+        "SELECT status, COUNT(*) as cnt FROM mcp_activity GROUP BY status"
+    ).run()
+    by_status = {r["status"]: r["cnt"] for r in status_rows}
+
+    return {"total_today": total_today, "by_tool": by_tool, "by_status": by_status}

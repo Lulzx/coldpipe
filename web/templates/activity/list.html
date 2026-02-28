@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% from "_macros/components.html" import page_header, filter_select, empty_state %}
+{% block title %}MCP Activity - Coldpipe{% endblock %}
+{% block content %}
+{{ page_header("MCP Activity", total ~ " tool call" ~ ("s" if total != 1 else "")) }}
+
+<div class="card mb-3">
+  <div class="card-body">
+    <form method="get" action="/activity" class="d-flex gap-2 flex-wrap">
+      <select name="status" class="form-select" style="max-width: 160px;" onchange="this.form.submit()">
+        <option value="">All statuses</option>
+        {% for s in ['success', 'error', 'running'] %}
+        <option value="{{ s }}"{% if status == s %} selected{% endif %}>{{ s|title }}</option>
+        {% endfor %}
+      </select>
+      <select name="tool_name" class="form-select" style="max-width: 220px;" onchange="this.form.submit()">
+        <option value="">All tools</option>
+        {% for t in [
+          'scrape_google_maps','scrape_exa','enrich_websites',
+          'get_leads','get_lead','search_leads','save_lead','tag_leads','count_leads',
+          'validate_leads',
+          'get_campaigns','get_campaign','create_campaign','update_campaign_status',
+          'enroll_leads_in_campaign','get_sequence_steps','add_sequence_step',
+          'get_send_queue','check_replies',
+          'get_deals','save_deal',
+          'get_dashboard_stats','get_campaign_stats','get_mcp_activity'
+        ] %}
+        <option value="{{ t }}"{% if tool_name == t %} selected{% endif %}>{{ t|replace('_', ' ') }}</option>
+        {% endfor %}
+      </select>
+      {% if status or tool_name %}
+      <a href="/activity" class="btn btn-ghost-secondary">Clear filters</a>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-vcenter card-table">
+      <thead>
+        <tr>
+          <th>Tool</th>
+          <th>Params</th>
+          <th>Result</th>
+          <th>Status</th>
+          <th>Duration</th>
+          <th>When</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% block table_body %}
+        {% for row in rows %}
+        <tr>
+          <td>
+            <span class="badge bg-blue-lt font-monospace">{{ row.tool_name }}</span>
+          </td>
+          <td>
+            <span class="text-muted small font-monospace">
+              {{ row.params[:80] ~ '…' if row.params|length > 80 else row.params }}
+            </span>
+          </td>
+          <td>
+            {% if row.error %}
+            <span class="text-danger small">{{ row.error[:100] ~ '…' if row.error|length > 100 else row.error }}</span>
+            {% else %}
+            <span class="text-muted small">{{ row.result_summary[:100] ~ '…' if row.result_summary|length > 100 else row.result_summary }}</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if row.status == 'success' %}
+            <span class="badge bg-green-lt">success</span>
+            {% elif row.status == 'error' %}
+            <span class="badge bg-red-lt">error</span>
+            {% else %}
+            <span class="badge bg-yellow-lt">{{ row.status }}</span>
+            {% endif %}
+          </td>
+          <td>
+            <span class="text-muted small">{{ row.duration_ms }}ms</span>
+          </td>
+          <td>
+            <span class="text-muted small">{{ row.created_at[:19] if row.created_at else '-' }}</span>
+          </td>
+        </tr>
+        {% else %}
+        {{ empty_state("No MCP activity yet", "Use Claude Code with the coldpipe MCP server to see tool calls here.", 6) }}
+        {% endfor %}
+        {% endblock %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% include "_partials/pagination.html" %}
+{% endblock %}

@@ -40,6 +40,19 @@ MIGRATIONS: dict[int, str] = {
         );
         CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
     """,
+    4: """
+        CREATE TABLE IF NOT EXISTS mcp_activity (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            tool_name  TEXT NOT NULL,
+            params     TEXT NOT NULL DEFAULT '',
+            result_summary TEXT NOT NULL DEFAULT '',
+            status     TEXT NOT NULL DEFAULT 'running',
+            error      TEXT,
+            duration_ms INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_mcp_created ON mcp_activity(created_at);
+    """,
 }
 
 

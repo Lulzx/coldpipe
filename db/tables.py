@@ -220,6 +220,16 @@ class Session(Table, tablename="sessions"):
     expires_at = Text()
 
 
+class McpActivity(Table, tablename="mcp_activity"):
+    tool_name = Text()
+    params = Text(default="")
+    result_summary = Text(default="")
+    status = Text(default="running")
+    error = Text(null=True, default=None)
+    duration_ms = Integer(default=0)
+    created_at = Text(default=_now_iso)
+
+
 # ---------------------------------------------------------------------------
 # Post-creation SQL for indexes and triggers not expressible in Piccolo
 # ---------------------------------------------------------------------------
@@ -269,4 +279,6 @@ _POST_CREATE_SQL = [
     "CREATE INDEX IF NOT EXISTS idx_dsl_date ON daily_send_log(mailbox_id, send_date)",
     # Sessions
     "CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token)",
+    # MCP activity
+    "CREATE INDEX IF NOT EXISTS idx_mcp_created ON mcp_activity(created_at)",
 ]

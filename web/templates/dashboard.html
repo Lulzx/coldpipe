@@ -205,6 +205,60 @@
     </div>
   </div>
 </div>
+<div class="row row-deck row-cards mt-3">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">MCP Activity</h3>
+        <div class="card-options">
+          <span class="text-muted small me-3">{{ mcp_stats.total_today }} calls today</span>
+          <a href="/activity" class="btn btn-sm btn-ghost-secondary">View all</a>
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-vcenter card-table">
+          <thead>
+            <tr>
+              <th>Tool</th>
+              <th>Result</th>
+              <th>Status</th>
+              <th>Duration</th>
+              <th>When</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in mcp_recent %}
+            <tr>
+              <td><span class="badge bg-blue-lt font-monospace">{{ row.tool_name }}</span></td>
+              <td><span class="text-muted small">{{ row.result_summary[:80] ~ '…' if row.result_summary|length > 80 else row.result_summary }}</span></td>
+              <td>
+                {% if row.status == 'success' %}
+                <span class="badge bg-green-lt">success</span>
+                {% elif row.status == 'error' %}
+                <span class="badge bg-red-lt">error</span>
+                {% else %}
+                <span class="badge bg-yellow-lt">{{ row.status }}</span>
+                {% endif %}
+              </td>
+              <td><span class="text-muted small">{{ row.duration_ms }}ms</span></td>
+              <td><span class="text-muted small">{{ row.created_at[:19] if row.created_at else '-' }}</span></td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="5">
+                <div class="empty py-3">
+                  <p class="empty-title">No MCP activity yet</p>
+                  <p class="empty-subtitle text-muted">Use Claude Code with the coldpipe MCP server to see tool calls here.</p>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}

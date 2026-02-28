@@ -70,6 +70,7 @@ async def init_db(db_path: str | Path | None = None) -> SQLiteEngine:
         EmailSent,
         Lead,
         Mailbox,
+        McpActivity,
         SchemaVersion,
         SequenceStep,
         Session,
@@ -90,6 +91,7 @@ async def init_db(db_path: str | Path | None = None) -> SQLiteEngine:
         SchemaVersion,
         User,
         Session,
+        McpActivity,
     ]
 
     # Bind engine to all table classes so queries use the right database
@@ -133,7 +135,7 @@ async def init_db(db_path: str | Path | None = None) -> SQLiteEngine:
     # Insert current schema version if table is empty
     existing = await SchemaVersion.select().run()
     if not existing:
-        await SchemaVersion.insert(SchemaVersion(version=3)).run()
+        await SchemaVersion.insert(SchemaVersion(version=4)).run()
 
     return _engine
 

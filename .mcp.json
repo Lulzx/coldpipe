@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "coldpipe": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["coldpipe_mcp.py"],
+      "cwd": "."
+    }
+  }
+}
