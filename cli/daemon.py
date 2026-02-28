@@ -90,7 +90,7 @@ def start():
                             for item in items[:remaining]:
                                 try:
                                     opener = await personalize_opener(
-                                        item, api_key=settings.anthropic_api_key
+                                        item, api_key=""
                                     )
                                     context = {
                                         **item,

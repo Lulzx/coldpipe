@@ -65,7 +65,6 @@ class Settings(msgspec.Struct, kw_only=True):
     llm: LlmSettings = LlmSettings()
     scraper: ScraperSettings = ScraperSettings()
     web: WebSettings = WebSettings()
-    anthropic_api_key: str = ""
     exa_api_key: str = ""
     log_level: str = "INFO"
     log_json: bool = False
@@ -117,7 +116,6 @@ def load_settings() -> Settings:
 
     # Environment overrides
     env_map = {
-        "ANTHROPIC_API_KEY": "anthropic_api_key",
         "EXA_API_KEY": "exa_api_key",
         "DB_PATH": "db_path",
         "LOG_LEVEL": "log_level",

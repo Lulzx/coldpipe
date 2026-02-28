@@ -137,12 +137,6 @@ def db_health():
 
             settings = load_settings()
             typer.echo("[OK] Configuration loaded")
-
-            # Check API key
-            if settings.anthropic_api_key:
-                typer.echo("[OK] Anthropic API key is set")
-            else:
-                typer.echo("[WARN] Anthropic API key is not set")
         except Exception as e:
             typer.echo(f"[FAIL] Configuration: {e}", err=True)
             checks_passed = False

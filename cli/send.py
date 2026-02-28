@@ -8,7 +8,6 @@ from rich.table import Table
 
 from cli import _run
 from config import setup_logging
-from config.settings import load_settings
 from db import get_db, queries
 
 console = Console()
@@ -22,7 +21,6 @@ def preview(
 ):
     """Preview a personalized email without sending."""
     setup_logging()
-    settings = load_settings()
 
     async def _preview():
         async with get_db() as db:
@@ -63,7 +61,7 @@ def preview(
             # Generate opener
             from mailer.personalize import personalize_opener
 
-            opener = await personalize_opener(lead_dict, api_key=settings.anthropic_api_key)
+            opener = await personalize_opener(lead_dict, api_key="")
 
             # Render template
             from mailer.templates import render_template
@@ -97,7 +95,6 @@ def run(
 ):
     """Send emails for a specific campaign."""
     setup_logging()
-    settings = load_settings()
 
     async def _send():
         async with get_db() as db:
@@ -168,7 +165,7 @@ def run(
                             break
 
                         # Personalize
-                        opener = await personalize_opener(item, api_key=settings.anthropic_api_key)
+                        opener = await personalize_opener(item, api_key="")
 
                         # Render
                         context = {**item, "opener": opener, "sender_name": mailbox.display_name}

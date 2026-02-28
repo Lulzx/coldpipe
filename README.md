@@ -5,10 +5,10 @@ Cold outreach pipeline — scrape, enrich, validate, send, track.
 ## Features
 
 - **Multi-source scraping** — Google Maps, Yelp, Healthgrades, Zocdoc, Exa.ai, CSV import
-- **Website enrichment** — Deep-crawl sites with Crawl4AI + LLM extraction for emails and contact info
+- **Website enrichment** — Deep-crawl sites with Crawl4AI for emails and contact info
 - **Pattern-based email discovery** — Generate and score candidate emails from name + domain
 - **Email validation** — MX lookup, SMTP verification, catch-all detection, provider identification
-- **LLM personalization** — Claude-powered unique openers with template fallback
+- **MCP personalization** — Claude Code-powered unique openers via MCP sampling with template fallback
 - **Multi-step sequences** — Configurable email sequences with delay scheduling
 - **Mailbox warmup** — Automatic daily send limit progression
 - **Reply & bounce tracking** — IMAP polling with automatic sequence management
@@ -68,13 +68,16 @@ coldpipe daemon start
 | `deals` | `list`, `create`, `move`, `close`, `stats` | Manage deal pipeline |
 | `mailbox` | `add`, `list`, `test`, `deactivate` | Configure sending mailboxes |
 | `daemon` | `start` | Background scheduler for automated processing |
+| `mcp` | _(root command)_ | Start the FastMCP server for Claude Code |
 
 ## Architecture
 
 ```
 coldpipe/
 ├── cli/              # Typer CLI commands
-├── db/               # SQLite schema, migrations, queries (aiosqlite + msgspec)
+├── coldpipe_mcp.py   # FastMCP server — 25 tools for Claude Code integration
+├── .mcp.json         # MCP server registration for Claude Code
+├── db/               # SQLite schema, migrations, queries (Piccolo ORM)
 ├── scrapers/         # Google Maps, directories, Exa.ai, website enricher, CSV import
 ├── mailer/           # Email sender, sequences, templates, personalization, replies, bounces
 ├── shared/           # Email utils, patterns, scoring, scraping helpers
@@ -97,11 +100,6 @@ send_window_start = "08:00"
 send_window_end = "17:00"
 timezone = "America/New_York"
 
-[llm]
-model = "claude-haiku-4-5"
-max_concurrent = 5
-max_opener_words = 30
-
 [scraper]
 max_concurrent = 500
 timeout = 5
@@ -111,10 +109,22 @@ Environment variables:
 
 | Variable | Description |
 |----------|-------------|
-| `ANTHROPIC_API_KEY` | Claude API key for LLM personalization |
 | `EXA_API_KEY` | Exa.ai API key for neural search |
 | `DB_PATH` | Override default database path |
 | `LOG_LEVEL` | Logging level (default: `INFO`) |
+
+## Claude Code / MCP Integration
+
+Coldpipe ships a [FastMCP](https://gofastmcp.com) server that exposes all capabilities as MCP tools. With `.mcp.json` in the project root, Claude Code picks it up automatically — no Anthropic API key required.
+
+```bash
+# Start the MCP server manually (Claude Code auto-starts it)
+coldpipe mcp
+```
+
+**25 tools** across Lead Discovery, Lead Management, Email Validation, Campaign Management, Sending & Replies, Deals, and Analytics. Email opener personalization uses `ctx.sample()` — Claude Code generates the text via your existing subscription.
+
+All tool calls are logged to the `mcp_activity` table and visible at `GET /activity` in the web dashboard.
 
 ## License
 

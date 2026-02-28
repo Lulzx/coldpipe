@@ -1,50 +1,104 @@
-"""Google Maps scraper using Crawl4AI with LLM extraction for local businesses."""
+"""Google Maps scraper using Crawl4AI with regex-based extraction."""
 
 from __future__ import annotations
 
-import json
-import os
+import re
 from typing import Any
 
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
-from crawl4ai.extraction_strategy import LLMExtractionStrategy
 
 from db.queries import upsert_lead
 from db.tables import Lead
 
-_SYSTEM_PROMPT = """Extract business information from Google Maps search results.
-For each result, extract:
-- name: business name
-- address: full street address
-- city: city name
-- state: state abbreviation
-- zip: zip/postal code
-- phone: phone number
-- website: website URL
-- rating: star rating (as string)
 
-Return a JSON array of objects with these keys."""
+def _parse_maps_markdown(markdown: str, city: str, url: str) -> list[Lead]:
+    """Parse Crawl4AI markdown output from a Google Maps search page.
 
-_SCHEMA = {
-    "type": "array",
-    "items": {
-        "type": "object",
-        "properties": {
-            "name": {"type": "string"},
-            "address": {"type": "string"},
-            "city": {"type": "string"},
-            "state": {"type": "string"},
-            "zip": {"type": "string"},
-            "phone": {"type": "string"},
-            "website": {"type": "string"},
-            "rating": {"type": "string"},
-        },
-    },
-}
+    Google Maps listings appear in the rendered markdown as blocks
+    containing a business name, address, phone, website, and rating.
+    """
+    leads: list[Lead] = []
+
+    # Split into candidate blocks on double-newlines
+    blocks = re.split(r"\n{2,}", markdown)
+
+    for block in blocks:
+        lines = [l.strip() for l in block.splitlines() if l.strip()]
+        if not lines:
+            continue
+
+        # Heuristic: a block is a listing if it has at least a name-like
+        # first line and at least one of: phone, address pattern, or website.
+        name = ""
+        phone = ""
+        address = ""
+        website = ""
+        state = ""
+        zip_code = ""
+        rating = ""
+
+        # First non-empty line often is the business name (strip markdown link syntax)
+        raw_name = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", lines[0])
+        raw_name = re.sub(r"[#*`]", "", raw_name).strip()
+
+        # Skip if it looks like a UI element / nav item
+        if len(raw_name) < 3 or raw_name.lower() in ("menu", "search", "directions"):
+            continue
+
+        name = raw_name
+
+        for line in lines[1:]:
+            # Phone pattern
+            if not phone:
+                m = re.search(r"\(?\d{3}\)?[\s\-\.]\d{3}[\s\-\.]\d{4}", line)
+                if m:
+                    phone = m.group().strip()
+
+            # Website
+            if not website:
+                m = re.search(r"https?://[^\s\)\"']+", line)
+                if m:
+                    website = m.group().rstrip(".,")
+
+            # Rating
+            if not rating:
+                m = re.search(r"(\d\.\d)\s*(?:stars?|★|·)", line, re.IGNORECASE)
+                if not m:
+                    m = re.search(r"★\s*(\d\.\d)", line)
+                if m:
+                    rating = m.group(1)
+
+            # State / zip from address lines
+            m = re.search(r",\s*([A-Z]{2})\s+(\d{5})", line)
+            if m:
+                state = m.group(1)
+                zip_code = m.group(2)
+                # Address is the bit before the city/state/zip
+                addr_candidate = re.sub(r",\s*[A-Z]{2}\s+\d{5}.*", "", line).strip()
+                if addr_candidate and not address:
+                    address = addr_candidate
+
+        # Require a name and at least one piece of contact data
+        if name and (phone or website or address):
+            lead = Lead(
+                company=name,
+                phone=phone,
+                website=website,
+                address=address,
+                city=city,
+                state=state,
+                zip=zip_code,
+                source="google_maps",
+                source_url=url,
+                notes=f"rating:{rating}" if rating else "",
+            )
+            leads.append(lead)
+
+    return leads
 
 
 class GoogleMapsScraper:
-    """Scrape business listings from Google Maps using Crawl4AI + LLM extraction."""
+    """Scrape business listings from Google Maps using Crawl4AI."""
 
     async def scrape(
         self,
@@ -56,18 +110,9 @@ class GoogleMapsScraper:
         query = f"businesses in {city}"
         url = f"https://www.google.com/maps/search/{query.replace(' ', '+')}"
 
-        extraction = LLMExtractionStrategy(
-            provider=os.getenv("LLM_PROVIDER", "anthropic/claude-haiku-4-5-20251001"),
-            api_token=os.getenv("ANTHROPIC_API_KEY", ""),
-            schema=_SCHEMA,
-            instruction=_SYSTEM_PROMPT,
-        )
-
         browser_cfg = BrowserConfig(headless=True)
         run_cfg = CrawlerRunConfig(
-            extraction_strategy=extraction,
             js_code=[
-                # Scroll to load more results
                 """
                 (async () => {
                     const feed = document.querySelector('div[role="feed"]');
@@ -88,31 +133,22 @@ class GoogleMapsScraper:
         async with AsyncWebCrawler(config=browser_cfg) as crawler:
             result = await crawler.arun(url=url, config=run_cfg)
 
-            if not result.extracted_content:
+            markdown = getattr(result, "markdown", None) or getattr(result, "markdown_v2", None)
+            if not markdown:
                 return leads
 
-            try:
-                items = json.loads(result.extracted_content)
-            except json.JSONDecodeError, TypeError:
-                return leads
+            # markdown may be a string or an object with a .raw_markdown attribute
+            if not isinstance(markdown, str):
+                markdown = getattr(markdown, "raw_markdown", str(markdown))
 
-            for item in items[:max_results]:
-                if not isinstance(item, dict):
-                    continue
-                lead = Lead(
-                    company=item.get("name", ""),
-                    address=item.get("address", ""),
-                    city=item.get("city", "") or city,
-                    state=item.get("state", ""),
-                    zip=item.get("zip", ""),
-                    phone=item.get("phone", ""),
-                    website=item.get("website", ""),
-                    source="google_maps",
-                    source_url=url,
-                    notes=f"rating:{item.get('rating', '')}",
-                )
+            parsed = _parse_maps_markdown(markdown, city, url)
+
+            for lead in parsed[:max_results]:
                 if lead.company:
-                    await upsert_lead(db, lead)
+                    try:
+                        await upsert_lead(db, lead)
+                    except Exception:
+                        pass
                     leads.append(lead)
 
         return leads

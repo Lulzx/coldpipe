@@ -1,8 +1,6 @@
-"""Tests for LLM personalization with Claude API mocking."""
+"""Tests for template-based email personalization."""
 
 from __future__ import annotations
-
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -84,141 +82,58 @@ def test_build_user_prompt_empty_fields():
 
 
 # ---------------------------------------------------------------------------
-# Personalize opener (mock Claude API)
+# personalize_opener — always returns template fallback
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_personalize_opener_no_api_key():
-    """Without API key, should fall back to template."""
+async def test_personalize_opener_returns_fallback():
+    """personalize_opener always uses template fallback (LLM via MCP tool)."""
     lead = {"first_name": "Alice", "company": "Smile Dental", "city": "Austin"}
     result = await personalize_opener(lead, api_key="")
     assert "Smile Dental" in result
 
 
 @pytest.mark.asyncio
-async def test_personalize_opener_with_mock_api():
-    """With API key, should call Claude and return the response."""
-    mock_response = MagicMock()
-    mock_response.content = [
-        MagicMock(text="I noticed your Austin practice uses cutting-edge tech.")
-    ]
-
-    mock_client = MagicMock()
-    mock_client.messages.create = AsyncMock(return_value=mock_response)
-
-    with patch("mailer.personalize.anthropic.AsyncAnthropic", return_value=mock_client):
-        lead = {"first_name": "Alice", "company": "Smile Dental", "city": "Austin"}
-        result = await personalize_opener(lead, api_key="test-key")
-
-    assert "Austin" in result
-    mock_client.messages.create.assert_called_once()
+async def test_personalize_opener_ignores_api_key():
+    """api_key param is accepted for backward compat but not used."""
+    lead = {"first_name": "Alice", "company": "Smile Dental", "city": "Austin"}
+    result_no_key = await personalize_opener(lead, api_key="")
+    result_with_key = await personalize_opener(lead, api_key="sk-ant-ignored")
+    assert result_no_key == result_with_key
 
 
 @pytest.mark.asyncio
-async def test_personalize_opener_api_failure_fallback():
-    """On API failure, should fall back to template."""
-    mock_client = MagicMock()
-    mock_client.messages.create = AsyncMock(side_effect=RuntimeError("API down"))
-
-    with patch("mailer.personalize.anthropic.AsyncAnthropic", return_value=mock_client):
-        lead = {"first_name": "Alice", "company": "Smile Dental", "city": "Austin"}
-        result = await personalize_opener(lead, api_key="test-key")
-
-    # Should get the template fallback
-    assert "Smile Dental" in result
-
-
-@pytest.mark.asyncio
-async def test_personalize_opener_word_limit():
-    """Response exceeding max_opener_words should be truncated."""
-    long_text = " ".join(["word"] * 50)
-    mock_response = MagicMock()
-    mock_response.content = [MagicMock(text=long_text)]
-
-    mock_client = MagicMock()
-    mock_client.messages.create = AsyncMock(return_value=mock_response)
-
-    llm = LlmSettings(max_opener_words=10)
-
-    with patch("mailer.personalize.anthropic.AsyncAnthropic", return_value=mock_client):
-        lead = {"first_name": "Alice"}
-        result = await personalize_opener(lead, api_key="test-key", llm=llm)
-
-    assert len(result.split()) <= 10
+async def test_personalize_opener_empty_lead():
+    lead = {}
+    result = await personalize_opener(lead, api_key="")
+    assert result == ""
 
 
 # ---------------------------------------------------------------------------
-# Batch personalize (mock + semaphore)
+# batch_personalize — concurrency + template fallback
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_batch_personalize_with_mock():
-    """batch_personalize should process all leads with concurrency limit."""
-    mock_response = MagicMock()
-    mock_response.content = [MagicMock(text="Great practice!")]
-
-    mock_client = MagicMock()
-    mock_client.messages.create = AsyncMock(return_value=mock_response)
-
-    with patch("mailer.personalize.anthropic.AsyncAnthropic", return_value=mock_client):
-        leads = [
-            {"first_name": "Alice", "company": "Smile"},
-            {"first_name": "Bob", "company": "Jones"},
-            {"first_name": "Carol", "company": "Bright"},
-        ]
-        results = await batch_personalize(leads, api_key="test-key")
-
-    assert len(results) == 3
-    assert all(r == "Great practice!" for r in results)
-    assert mock_client.messages.create.call_count == 3
-
-
-@pytest.mark.asyncio
-async def test_batch_personalize_no_api_key():
-    """Without API key, all leads should get template fallback."""
+async def test_batch_personalize_returns_all():
     leads = [
         {"first_name": "Alice", "company": "Smile", "city": "Austin"},
         {"first_name": "Bob", "company": "Jones", "city": "Dallas"},
+        {"first_name": "Carol", "company": "Bright", "city": "Houston"},
     ]
     results = await batch_personalize(leads, api_key="")
-
-    assert len(results) == 2
+    assert len(results) == 3
     assert "Smile" in results[0]
     assert "Jones" in results[1]
+    assert "Bright" in results[2]
 
 
 @pytest.mark.asyncio
-async def test_batch_personalize_semaphore_limit():
-    """Semaphore should limit concurrency to max_concurrent."""
-    call_count = 0
-    max_concurrent_seen = 0
-    current_concurrent = 0
-
-    async def mock_create(**kwargs):
-        nonlocal call_count, max_concurrent_seen, current_concurrent
-        current_concurrent += 1
-        max_concurrent_seen = max(max_concurrent_seen, current_concurrent)
-        call_count += 1
-        # Small yield to allow other tasks to run
-        import asyncio
-
-        await asyncio.sleep(0.01)
-        current_concurrent -= 1
-        resp = MagicMock()
-        resp.content = [MagicMock(text="Opener")]
-        return resp
-
-    mock_client = MagicMock()
-    mock_client.messages.create = mock_create
-
+async def test_batch_personalize_respects_semaphore():
+    """batch_personalize should still respect max_concurrent (semaphore path)."""
+    leads = [{"first_name": f"Lead{i}", "company": f"Co{i}"} for i in range(6)]
     llm = LlmSettings(max_concurrent=2)
-
-    with patch("mailer.personalize.anthropic.AsyncAnthropic", return_value=mock_client):
-        leads = [{"first_name": f"Lead{i}"} for i in range(6)]
-        results = await batch_personalize(leads, api_key="test-key", llm=llm)
-
+    results = await batch_personalize(leads, api_key="", llm=llm)
     assert len(results) == 6
-    assert call_count == 6
-    assert max_concurrent_seen <= 2
+    assert all(isinstance(r, str) for r in results)

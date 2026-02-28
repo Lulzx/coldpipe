@@ -12,7 +12,7 @@ import asyncio
 import json
 import time
 
-from fastmcp import FastMCP
+from fastmcp import Context, FastMCP
 
 from db import init_db
 from db.queries import (
@@ -561,6 +561,52 @@ async def get_mcp_activity_tool(limit: int = 20) -> str:
         ])
 
     return await _logged("get_mcp_activity", {"limit": limit}, _work())
+
+
+# ---------------------------------------------------------------------------
+# Personalization (MCP sampling — Claude Code generates the text)
+# ---------------------------------------------------------------------------
+
+PERSONALIZE_SYSTEM = (
+    "Generate a unique 1-2 sentence cold email opener. "
+    "Reference ONE specific thing about the business. "
+    "Under 30 words. No sycophancy. Return only the opener text."
+)
+
+
+@mcp.tool
+async def personalize_opener(lead_json: str, ctx: Context) -> str:
+    """Generate a personalized cold email opener for a lead via MCP sampling.
+
+    lead_json: JSON string with lead fields (company, city, job_title, etc.)
+    Uses ctx.sample() so Claude Code generates the text — no API key needed.
+    Falls back to a template opener if sampling is unavailable.
+    """
+    from mailer.personalize import _build_user_prompt, _fallback_opener
+
+    async def _work():
+        try:
+            import json as _json
+
+            lead = _json.loads(lead_json)
+        except Exception:
+            return "Hi there, "
+
+        user_prompt = _build_user_prompt(lead)
+
+        try:
+            result = await ctx.sample(
+                user_prompt,
+                system_prompt=PERSONALIZE_SYSTEM,
+                max_tokens=100,
+            )
+            text = result.text.strip()
+            words = text.split()
+            return " ".join(words[:30]) if len(words) > 30 else text
+        except Exception:
+            return _fallback_opener(lead)
+
+    return await _logged("personalize_opener", {"lead": lead_json[:100]}, _work())
 
 
 # ---------------------------------------------------------------------------

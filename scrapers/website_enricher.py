@@ -2,15 +2,9 @@
 
 from __future__ import annotations
 
-import json
-import os
 from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlparse
-
-from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
-from crawl4ai.deep_crawling import BFSDeepCrawlStrategy
-from crawl4ai.extraction_strategy import LLMExtractionStrategy
 
 from db.queries import get_leads, upsert_lead
 from db.tables import Lead
@@ -20,35 +14,6 @@ from shared.patterns import generate_candidates
 from shared.scoring import EmailCandidate, pick_best
 from shared.scraping import scrape_site_for_emails
 from tools.validate import EmailValidator
-
-_ENRICHMENT_PROMPT = """Extract contact information for this business from the page content.
-Return a JSON object with these fields (use empty string if not found):
-- emails: array of email addresses found
-- phone: primary phone number
-- address: street address
-- city: city name
-- state: state abbreviation
-- zip: zip code
-- contact_names: array of contact/owner names found
-- specialties: array of specialties or focus areas
-- services: array of services offered
-- about: brief description of the business (max 200 chars)"""
-
-_ENRICHMENT_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "emails": {"type": "array", "items": {"type": "string"}},
-        "phone": {"type": "string"},
-        "address": {"type": "string"},
-        "city": {"type": "string"},
-        "state": {"type": "string"},
-        "zip": {"type": "string"},
-        "contact_names": {"type": "array", "items": {"type": "string"}},
-        "specialties": {"type": "array", "items": {"type": "string"}},
-        "services": {"type": "array", "items": {"type": "string"}},
-        "about": {"type": "string"},
-    },
-}
 
 
 def _parse_name(name: str) -> tuple[str, str]:
@@ -76,7 +41,6 @@ class WebsiteEnricher:
         lead_ids: list[int] | None = None,
     ) -> list[Lead]:
         """Enrich leads that have a website but are missing email/phone/address."""
-        # Fetch leads needing enrichment
         all_leads: list[Lead] = []
         offset = 0
         while True:
@@ -88,10 +52,8 @@ class WebsiteEnricher:
 
         if lead_ids:
             wanted = set(lead_ids)
-            # Respect explicit caller selection when provided.
             targets = [lead for lead in all_leads if lead.id in wanted][:limit]
         else:
-            # Default behavior: leads with websites missing key contact data.
             targets = [
                 lead for lead in all_leads if lead.website and (not lead.email or not lead.phone)
             ][:limit]
@@ -100,155 +62,97 @@ class WebsiteEnricher:
             return []
 
         enriched: list[Lead] = []
-        browser_cfg = BrowserConfig(headless=True)
 
-        extraction = LLMExtractionStrategy(
-            provider=os.getenv("LLM_PROVIDER", "anthropic/claude-haiku-4-5-20251001"),
-            api_token=os.getenv("ANTHROPIC_API_KEY", ""),
-            schema=_ENRICHMENT_SCHEMA,
-            instruction=_ENRICHMENT_PROMPT,
-        )
+        for lead in targets:
+            url = lead.website
+            if not url.startswith("http"):
+                url = f"https://{url}"
 
-        deep_crawl = BFSDeepCrawlStrategy(max_depth=2, max_pages=8)
+            data: dict[str, Any] | None = await self._fallback_scrape(url)
 
-        run_cfg = CrawlerRunConfig(
-            extraction_strategy=extraction,
-            deep_crawl_strategy=deep_crawl,
-            page_timeout=30000,
-        )
+            if not data and lead.first_name and lead.last_name and lead.website:
+                domain = urlparse(url).hostname or ""
+                domain = domain.replace("www.", "")
+                if domain:
+                    candidates = generate_candidates(lead.first_name, lead.last_name, domain)
+                    if candidates:
+                        validator = EmailValidator(concurrency=10)
+                        results = await validator.validate_candidates(candidates, domain)
+                        scored = [
+                            EmailCandidate(
+                                email=r["email"],
+                                source="pattern",
+                                smtp_status=r["status"],
+                                is_catchall=r["is_catchall"],
+                                provider=r["provider"],
+                                matches_domain=True,
+                            )
+                            for r in results
+                        ]
+                        best = pick_best(scored)
+                        if best:
+                            data = {"emails": [best[0].email]}
+                            data["_email_confidence"] = best[1]
+                            data["_email_source"] = "pattern"
+                            data["_email_provider"] = best[0].provider
 
-        async with AsyncWebCrawler(config=browser_cfg) as crawler:
-            for lead in targets:
-                url = lead.website
-                if not url.startswith("http"):
-                    url = f"https://{url}"
+            if not data:
+                continue
 
-                data: dict[str, Any] | None = await self._crawl_site(crawler, url, run_cfg)
+            emails = [e for e in data.get("emails", []) if not is_junk(e)]
+            if emails and not lead.email:
+                fields = lead.to_dict()
+                fields["email"] = emails[0]
+                lead = Lead(**fields)
 
-                if not data:
-                    # Fallback: use shared scraping module
-                    data = await self._fallback_scrape(url)
+            updates: dict[str, Any] = {}
+            if data.get("phone") and not lead.phone:
+                updates["phone"] = data["phone"]
+            if data.get("address") and not lead.address:
+                updates["address"] = data["address"]
+            if data.get("city") and not lead.city:
+                updates["city"] = data["city"]
+            if data.get("state") and not lead.state:
+                updates["state"] = data["state"]
+            if data.get("zip") and not lead.zip:
+                updates["zip"] = data["zip"]
 
-                if not data and lead.first_name and lead.last_name and lead.website:
-                    # Pattern fallback: generate candidates from name + domain
-                    domain = urlparse(url).hostname or ""
-                    domain = domain.replace("www.", "")
-                    if domain:
-                        candidates = generate_candidates(lead.first_name, lead.last_name, domain)
-                        if candidates:
-                            validator = EmailValidator(concurrency=10)
-                            results = await validator.validate_candidates(candidates, domain)
-                            scored = [
-                                EmailCandidate(
-                                    email=r["email"],
-                                    source="pattern",
-                                    smtp_status=r["status"],
-                                    is_catchall=r["is_catchall"],
-                                    provider=r["provider"],
-                                    matches_domain=True,
-                                )
-                                for r in results
-                            ]
-                            best = pick_best(scored)
-                            if best:
-                                data = {"emails": [best[0].email]}
-                                data["_email_confidence"] = best[1]
-                                data["_email_source"] = "pattern"
-                                data["_email_provider"] = best[0].provider
-                if not data:
-                    continue
+            names = data.get("contact_names", [])
+            if names and not lead.first_name:
+                first, last = _parse_name(names[0])
+                updates["first_name"] = first
+                updates["last_name"] = last
 
-                # Apply enrichment data to lead
-                emails = [e for e in data.get("emails", []) if not is_junk(e)]
-                if emails and not lead.email:
-                    fields = lead.to_dict()
-                    fields["email"] = emails[0]
-                    lead = Lead(**fields)
+            notes_parts = []
+            if data.get("specialties"):
+                notes_parts.append(f"specialties:{','.join(data['specialties'])}")
+            if data.get("services"):
+                notes_parts.append(f"services:{','.join(data['services'][:5])}")
+            if data.get("about"):
+                notes_parts.append(data["about"][:200])
+            if notes_parts and not lead.notes:
+                updates["notes"] = " | ".join(notes_parts)
 
-                updates: dict[str, Any] = {}
-                if data.get("phone") and not lead.phone:
-                    updates["phone"] = data["phone"]
-                if data.get("address") and not lead.address:
-                    updates["address"] = data["address"]
-                if data.get("city") and not lead.city:
-                    updates["city"] = data["city"]
-                if data.get("state") and not lead.state:
-                    updates["state"] = data["state"]
-                if data.get("zip") and not lead.zip:
-                    updates["zip"] = data["zip"]
+            if data.get("_email_confidence"):
+                updates["email_confidence"] = data["_email_confidence"]
+            if data.get("_email_source"):
+                updates["email_source"] = data["_email_source"]
+            if data.get("_email_provider"):
+                updates["email_provider"] = data["_email_provider"]
 
-                # Extract dentist names into first/last if missing
-                names = data.get("contact_names", [])
-                if names and not lead.first_name:
-                    first, last = _parse_name(names[0])
-                    updates["first_name"] = first
-                    updates["last_name"] = last
+            updates["enriched_at"] = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-                # Build notes from specialties/services/about
-                notes_parts = []
-                if data.get("specialties"):
-                    notes_parts.append(f"specialties:{','.join(data['specialties'])}")
-                if data.get("services"):
-                    notes_parts.append(f"services:{','.join(data['services'][:5])}")
-                if data.get("about"):
-                    notes_parts.append(data["about"][:200])
-                if notes_parts and not lead.notes:
-                    updates["notes"] = " | ".join(notes_parts)
-
-                # Apply pattern-fallback scoring metadata if present
-                if data.get("_email_confidence"):
-                    updates["email_confidence"] = data["_email_confidence"]
-                if data.get("_email_source"):
-                    updates["email_source"] = data["_email_source"]
-                if data.get("_email_provider"):
-                    updates["email_provider"] = data["_email_provider"]
-
-                updates["enriched_at"] = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-                if updates:
-                    fields = lead.to_dict()
-                    fields.update(updates)
-                    updated = Lead(**fields)
-                    await upsert_lead(db, updated)
-                    enriched.append(updated)
+            if updates:
+                fields = lead.to_dict()
+                fields.update(updates)
+                updated = Lead(**fields)
+                await upsert_lead(db, updated)
+                enriched.append(updated)
 
         return enriched
 
-    async def _crawl_site(
-        self,
-        crawler: AsyncWebCrawler,
-        url: str,
-        run_cfg: CrawlerRunConfig,
-    ) -> dict[str, Any] | None:
-        """Run Crawl4AI deep crawl + LLM extraction on a site."""
-        try:
-            results = await crawler.arun(url=url, config=run_cfg)  # type: ignore[arg-type]
-            if not results.extracted_content:  # type: ignore[union-attr]
-                return None
-            data = json.loads(results.extracted_content)  # type: ignore[union-attr]
-            if isinstance(data, list):
-                # Merge multiple page extractions
-                merged: dict[str, Any] = {
-                    "emails": [],
-                    "contact_names": [],
-                    "specialties": [],
-                    "services": [],
-                }
-                for item in data:
-                    if not isinstance(item, dict):
-                        continue
-                    for key in ("emails", "contact_names", "specialties", "services"):
-                        merged[key].extend(item.get(key, []))
-                    for key in ("phone", "address", "city", "state", "zip", "about"):
-                        if item.get(key) and not merged.get(key):
-                            merged[key] = item[key]
-                return merged
-            return data if isinstance(data, dict) else None
-        except Exception:
-            return None
-
     async def _fallback_scrape(self, url: str) -> dict[str, Any] | None:
-        """Use shared/scraping.py as fallback for email extraction."""
+        """Use shared/scraping.py for email extraction (no LLM needed)."""
         try:
             sessions = create_sessions()
             ssl_session, nossl_session = sessions
