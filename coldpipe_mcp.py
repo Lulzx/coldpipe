@@ -832,6 +832,19 @@ async def send_campaign_emails(campaign_id: int, limit: int = 50, ctx: Context =
             return f"Daily limit reached ({sent_today}/{daily_max})"
 
         to_send = queue[:remaining]
+
+        if ctx is not None:
+            preview = ", ".join(item["email"] for item in to_send[:3])
+            if len(to_send) > 3:
+                preview += f" … +{len(to_send) - 3} more"
+            confirmation = await ctx.elicit(
+                f"Send {len(to_send)} email(s) for campaign '{campaign.name}' "
+                f"from {mailbox.email}?\n\nRecipients: {preview}\n"
+                f"Daily usage after send: {sent_today + len(to_send)}/{daily_max}",
+                response_type=bool,
+            )
+            if confirmation.action != "accept" or not confirmation.data:
+                return f"Send cancelled ({confirmation.action})"
         smtp = SmtpSettings(
             host=mailbox.smtp_host,
             port=mailbox.smtp_port,
