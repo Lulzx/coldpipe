@@ -19,36 +19,85 @@ try:
 except ImportError:
     sys.exit("aiosmtplib is required: pip install aiosmtplib")
 
+try:
+    import dns.asyncresolver
+    import dns.exception
+    import dns.resolver
+except ImportError:
+    sys.exit("dnspython is required: pip install dnspython")
+
 
 class EmailValidator:
     def __init__(self, concurrency: int = 50):
         self.concurrency = concurrency
-        self.catchall_cache: dict[str, bool] = {}  # domain -> is_catchall
+        self.catchall_cache: dict[str, bool] = {}       # domain -> is_catchall
+        self.catchall_locks: dict[str, asyncio.Lock] = {}  # one lock per domain
+        self.mx_cache: dict[str, dict] = {}             # domain -> mx info (successes only)
+        self.mx_locks: dict[str, asyncio.Lock] = {}     # one lock per domain
         self.domain_sems: dict[str, asyncio.Semaphore] = {}
+        self.dns_sem = asyncio.Semaphore(50)            # cap concurrent DNS queries
 
     def _get_domain_sem(self, domain: str) -> asyncio.Semaphore:
         if domain not in self.domain_sems:
-            self.domain_sems[domain] = asyncio.Semaphore(3)
+            self.domain_sems[domain] = asyncio.Semaphore(10)
         return self.domain_sems[domain]
 
-    def validate_syntax_and_mx(self, email: str) -> dict:
-        """Validate email syntax and check MX records via email-validator.
+    def _get_catchall_lock(self, domain: str) -> asyncio.Lock:
+        if domain not in self.catchall_locks:
+            self.catchall_locks[domain] = asyncio.Lock()
+        return self.catchall_locks[domain]
 
-        Returns dict with keys: valid, mx_host, provider, error.
-        """
+    def _get_mx_lock(self, domain: str) -> asyncio.Lock:
+        if domain not in self.mx_locks:
+            self.mx_locks[domain] = asyncio.Lock()
+        return self.mx_locks[domain]
+
+    async def validate_syntax_and_mx(self, email: str) -> dict:
+        """Validate email syntax (async-safe), then async MX lookup. Cached per domain."""
+        domain = email.split("@")[1] if "@" in email else ""
+
+        # Syntax check only (no DNS) — safe to call without a thread
         try:
-            info = validate_email(email, check_deliverability=True)
-            mx_host = ""
-            if info.mx:
-                mx_host = info.mx[0][1]
-            provider = self._detect_provider_from_mx(info.mx or [])
-            return {"valid": True, "mx_host": mx_host, "provider": provider, "error": ""}
+            validate_email(email, check_deliverability=False)
         except EmailNotValidError as e:
             return {"valid": False, "mx_host": "", "provider": "generic", "error": str(e)}
 
+        if not domain:
+            return {"valid": False, "mx_host": "", "provider": "generic", "error": "no domain"}
+
+        # Check MX cache (no lock needed for read)
+        if domain in self.mx_cache:
+            return self.mx_cache[domain]
+
+        async with self._get_mx_lock(domain):
+            if domain in self.mx_cache:
+                return self.mx_cache[domain]
+
+            async with self.dns_sem:
+                for attempt in range(3):
+                    try:
+                        answers = await dns.asyncresolver.resolve(domain, "MX")
+                        mx_records = sorted((r.preference, str(r.exchange).rstrip(".")) for r in answers)
+                        mx_host = mx_records[0][1] if mx_records else ""
+                        provider = self._detect_provider_from_mx(mx_records)
+                        result = {"valid": True, "mx_host": mx_host, "provider": provider, "error": ""}
+                        self.mx_cache[domain] = result  # only cache successes
+                        return result
+                    except dns.resolver.NXDOMAIN:
+                        # Domain doesn't exist — definitive, no retry
+                        return {"valid": False, "mx_host": "", "provider": "generic", "error": "no MX (NXDOMAIN)"}
+                    except dns.resolver.NoAnswer:
+                        # Domain exists but no MX record — definitive
+                        return {"valid": False, "mx_host": "", "provider": "generic", "error": "no MX record"}
+                    except Exception:
+                        if attempt < 2:
+                            await asyncio.sleep(0.5 * (attempt + 1))
+                        continue
+
+            return {"valid": False, "mx_host": "", "provider": "generic", "error": "no MX (DNS timeout)"}
+
     @staticmethod
     def _detect_provider_from_mx(mx_records: list) -> str:
-        """Detect email provider from MX records."""
         for _priority, host in mx_records:
             h = host.lower()
             if "google" in h or "gmail" in h:
@@ -65,43 +114,48 @@ class EmailValidator:
         sem = self._get_domain_sem(domain)
 
         async with sem:
-            try:
-                client = aiosmtplib.SMTP(hostname=mx_host, port=25, timeout=10)
-                await client.connect()
-                await client.ehlo()
-                await client.mail("")
-                code, _ = await client.rcpt(email)
-                await client.quit()
+            for port in (25, 587):
+                try:
+                    client = aiosmtplib.SMTP(hostname=mx_host, port=port, timeout=5)
+                    await client.connect()
+                    await client.ehlo()
+                    await client.mail("")
+                    code, _ = await client.rcpt(email)
+                    await client.quit()
 
-                if 200 <= code < 300:
-                    return "valid"
-                elif 500 <= code < 600:
+                    if 200 <= code < 300:
+                        return "valid"
+                    elif 500 <= code < 600:
+                        return "invalid"
+                    else:
+                        return "error"
+                except aiosmtplib.SMTPRecipientRefused:
                     return "invalid"
-                else:
+                except Exception:
+                    if port == 25:
+                        continue  # try 587
                     return "error"
-            except aiosmtplib.SMTPRecipientRefused:
-                return "invalid"
-            except Exception:
-                return "error"
-            finally:
-                await asyncio.sleep(1)  # Rate limit: 1s delay between probes to same MX
+        return "error"
 
     async def check_catchall(self, domain: str, mx_host: str) -> bool:
-        """Probe a random address to detect catch-all domains."""
+        """Probe a random address to detect catch-all domains. Race-safe via per-domain lock."""
         if domain in self.catchall_cache:
             return self.catchall_cache[domain]
 
-        random_local = "".join(random.choices(string.ascii_lowercase + string.digits, k=8))
-        probe = f"{random_local}@{domain}"
-        result = await self.smtp_verify(probe, mx_host)
-        is_catchall = result == "valid"
-        self.catchall_cache[domain] = is_catchall
-        return is_catchall
+        async with self._get_catchall_lock(domain):
+            if domain in self.catchall_cache:
+                return self.catchall_cache[domain]
+
+            random_local = "".join(random.choices(string.ascii_lowercase + string.digits, k=8))
+            probe = f"{random_local}@{domain}"
+            result = await self.smtp_verify(probe, mx_host)
+            is_catchall = result == "valid"
+            self.catchall_cache[domain] = is_catchall
+            return is_catchall
 
     async def validate_email(self, email: str) -> dict:
         """Full validation pipeline for a single email."""
-        # Step 1: Syntax + MX via email-validator
-        check = self.validate_syntax_and_mx(email)
+        check = await self.validate_syntax_and_mx(email)
         if not check["valid"]:
             status = (
                 "no-mx"
@@ -116,26 +170,24 @@ class EmailValidator:
         if not mx_host:
             return {"validation_status": "no-mx", "mx_host": "", "provider": provider}
 
-        # Step 2: Check catch-all (cached per domain)
         domain = email.split("@")[1]
-        is_catchall = await self.check_catchall(domain, mx_host)
+        # Gmail, M365, Yahoo never accept random addresses — skip catch-all probe
+        if provider not in ("gmail", "microsoft365", "yahoo"):
+            is_catchall = await self.check_catchall(domain, mx_host)
+        else:
+            is_catchall = False
 
         if is_catchall:
             return {"validation_status": "catch-all", "mx_host": mx_host, "provider": provider}
 
-        # Step 3: SMTP verify the actual email
         result = await self.smtp_verify(email, mx_host)
         return {"validation_status": result, "mx_host": mx_host, "provider": provider}
 
     async def validate_candidates(self, candidates: list[str], domain: str) -> list[dict]:
-        """Batch-validate a list of candidate emails for a single domain.
-
-        Returns a list of dicts with keys: email, status, provider, is_catchall.
-        """
-        # Check first candidate for syntax/MX
+        """Batch-validate candidate emails for a single domain in parallel."""
         if not candidates:
             return []
-        check = self.validate_syntax_and_mx(candidates[0])
+        check = await self.validate_syntax_and_mx(candidates[0])
         if not check["valid"] or not check["mx_host"]:
             return [
                 {"email": c, "status": "no-mx", "provider": "generic", "is_catchall": False}
@@ -152,18 +204,11 @@ class EmailValidator:
                 for c in candidates
             ]
 
-        results = []
-        for email in candidates:
+        async def _probe(email: str) -> dict:
             status = await self.smtp_verify(email, mx_host)
-            results.append(
-                {
-                    "email": email,
-                    "status": status,
-                    "provider": provider,
-                    "is_catchall": False,
-                }
-            )
-        return results
+            return {"email": email, "status": status, "provider": provider, "is_catchall": False}
+
+        return list(await asyncio.gather(*[_probe(c) for c in candidates]))
 
 
 async def validate_all(leads: list[dict], concurrency: int = 50) -> list[dict]:
@@ -209,7 +254,6 @@ def main():
     leads = asyncio.run(validate_all(leads, args.concurrency))
     elapsed = time.time() - start
 
-    # Stats
     status_counts = {}
     for lead in leads:
         s = lead.get("validation_status", "")
@@ -219,7 +263,6 @@ def main():
     for status, count in sorted(status_counts.items()):
         print(f"    {status}: {count}")
 
-    # Determine output fields
     fieldnames = list(leads[0].keys()) if leads else []
     save_csv(leads, args.output, fieldnames)
     print(f"\nSaved to {args.output}")
