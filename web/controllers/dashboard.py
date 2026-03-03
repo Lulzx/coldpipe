@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections import defaultdict
 
 from litestar import Controller, Request, get
@@ -40,29 +41,32 @@ class DashboardController(Controller):
 
     @get("/")
     async def index(self, request: Request) -> Template:
-        lead_stats = await get_lead_stats()
-        activity = await get_today_activity()
-        deal_stats = await get_deal_stats()
-        pipeline = await get_pipeline_stats()
-        campaigns = await get_campaigns(status="active")
-        daily = await get_daily_stats(days=30)
-        mailboxes = await get_mailboxes(active_only=True)
-        mcp_stats = await get_mcp_stats()
-        mcp_recent = await get_mcp_activity(limit=5)
+        (
+            lead_stats, activity, deal_stats, pipeline,
+            campaigns, daily, mailboxes, mcp_stats, mcp_recent,
+        ) = await asyncio.gather(
+            get_lead_stats(),
+            get_today_activity(),
+            get_deal_stats(),
+            get_pipeline_stats(),
+            get_campaigns(status="active"),
+            get_daily_stats(days=30),
+            get_mailboxes(active_only=True),
+            get_mcp_stats(),
+            get_mcp_activity(limit=5),
+        )
 
-        mailbox_warmup = []
-        for mb in mailboxes:
-            sent, limit = await check_daily_limit(mb.id)
-            warmup_limit = get_warmup_limit(mb.warmup_day)
-            mailbox_warmup.append(
-                {
-                    "email": mb.email,
-                    "warmup_day": mb.warmup_day,
-                    "warmup_limit": warmup_limit,
-                    "sent_today": sent,
-                    "daily_limit": limit,
-                }
-            )
+        limit_results = await asyncio.gather(*[check_daily_limit(mb.id) for mb in mailboxes])
+        mailbox_warmup = [
+            {
+                "email": mb.email,
+                "warmup_day": mb.warmup_day,
+                "warmup_limit": get_warmup_limit(mb.warmup_day),
+                "sent_today": sent,
+                "daily_limit": limit,
+            }
+            for mb, (sent, limit) in zip(mailboxes, limit_results, strict=True)
+        ]
 
         # Pivot daily stats into chart series
         days_map: dict[str, dict[str, int]] = defaultdict(

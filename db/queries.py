@@ -7,6 +7,7 @@ the Piccolo engine.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from typing import Any
 
@@ -113,11 +114,9 @@ async def upsert_leads_batch(db: Any = None, leads: list | None = None, **kw) ->
         leads = db
         db = None
 
-    count = 0
-    for lead in leads or []:
-        await upsert_lead(lead=lead)
-        count += 1
-    return count
+    batch = leads or []
+    await asyncio.gather(*[upsert_lead(lead=lead) for lead in batch])
+    return len(batch)
 
 
 async def get_leads(
@@ -604,16 +603,18 @@ async def check_daily_limit(db: Any = None, mailbox_id: int = 0) -> tuple[int, i
         db = None
 
     today = datetime.now(UTC).strftime("%Y-%m-%d")
-    rows = (
-        await DailySendLog.select(DailySendLog.send_count)
-        .where((DailySendLog.mailbox_id == mailbox_id) & (DailySendLog.send_date == today))
-        .run()
-    )
-    sent = rows[0]["count"] if rows else 0
-
-    rows2 = await Mailbox.select(Mailbox.daily_limit).where(Mailbox.id == mailbox_id).run()
-    limit = rows2[0]["daily_limit"] if rows2 else 30
-    return sent, limit
+    rows = await Mailbox.raw(
+        """SELECT m.daily_limit,
+                  COALESCE(d.count, 0) AS sent
+           FROM mailboxes m
+           LEFT JOIN daily_send_log d
+                  ON d.mailbox_id = m.id AND d.send_date = {}
+           WHERE m.id = {}""",
+        today,
+        mailbox_id,
+    ).run()
+    row = rows[0] if rows else {"daily_limit": 30, "sent": 0}
+    return row["sent"], row["daily_limit"]
 
 
 async def increment_daily_send(db: Any = None, mailbox_id: int = 0) -> int:
@@ -623,18 +624,13 @@ async def increment_daily_send(db: Any = None, mailbox_id: int = 0) -> int:
         db = None
 
     today = datetime.now(UTC).strftime("%Y-%m-%d")
-    await DailySendLog.raw(
+    rows = await DailySendLog.raw(
         """INSERT INTO daily_send_log (mailbox_id, send_date, count) VALUES ({}, {}, 1)
-           ON CONFLICT(mailbox_id, send_date) DO UPDATE SET count = count + 1""",
+           ON CONFLICT(mailbox_id, send_date) DO UPDATE SET count = count + 1
+           RETURNING count""",
         mailbox_id,
         today,
     ).run()
-
-    rows = (
-        await DailySendLog.select(DailySendLog.send_count)
-        .where((DailySendLog.mailbox_id == mailbox_id) & (DailySendLog.send_date == today))
-        .run()
-    )
     return rows[0]["count"] if rows else 0
 
 
@@ -744,27 +740,23 @@ async def get_daily_stats(db: Any = None, days: int = 30) -> list[dict]:
 
 async def get_lead_stats(db: Any = None) -> dict:
     """Get lead counts grouped by email_status and source."""
-    result: dict = {}
-
-    rows = await Lead.raw(
-        "SELECT email_status, COUNT(*) as cnt FROM leads GROUP BY email_status"
-    ).run()
-    result["by_status"] = {row["email_status"]: row["cnt"] for row in rows}
-
-    rows = await Lead.raw(
-        "SELECT source, COUNT(*) as cnt FROM leads GROUP BY source ORDER BY cnt DESC"
-    ).run()
-    result["by_source"] = {row["source"]: row["cnt"] for row in rows}
-
-    rows = await Lead.raw(
-        """SELECT city, state, COUNT(*) as cnt FROM leads WHERE city != ''
-           GROUP BY city, state ORDER BY cnt DESC LIMIT 20"""
-    ).run()
-    result["by_city"] = {f"{row['city']}, {row['state']}": row["cnt"] for row in rows}
-
-    total = await Lead.count().run()
-    result["total"] = total
-    return result
+    status_rows, source_rows, city_rows, total = await asyncio.gather(
+        Lead.raw("SELECT email_status, COUNT(*) AS cnt FROM leads GROUP BY email_status").run(),
+        Lead.raw(
+            "SELECT source, COUNT(*) AS cnt FROM leads GROUP BY source ORDER BY cnt DESC"
+        ).run(),
+        Lead.raw(
+            """SELECT city, state, COUNT(*) AS cnt FROM leads WHERE city != ''
+               GROUP BY city, state ORDER BY cnt DESC LIMIT 20"""
+        ).run(),
+        Lead.count().run(),
+    )
+    return {
+        "by_status": {row["email_status"]: row["cnt"] for row in status_rows},
+        "by_source": {row["source"]: row["cnt"] for row in source_rows},
+        "by_city": {f"{row['city']}, {row['state']}": row["cnt"] for row in city_rows},
+        "total": total,
+    }
 
 
 async def tag_leads(db: Any = None, lead_ids: list[int] | None = None, tag: str = "") -> int:
@@ -773,18 +765,32 @@ async def tag_leads(db: Any = None, lead_ids: list[int] | None = None, tag: str 
         lead_ids = db
         db = None
 
-    count = 0
-    for lid in lead_ids or []:
-        rows = await Lead.select(Lead.tags).where(Lead.id == lid).run()
-        if not rows:
-            continue
-        existing = rows[0]["tags"] or ""
-        tags_list = [t.strip() for t in existing.split(",") if t.strip()]
-        if tag not in tags_list:
-            tags_list.append(tag)
-            await Lead.update({Lead.tags: ",".join(tags_list)}).where(Lead.id == lid).run()
-            count += 1
-    return count
+    ids = lead_ids or []
+    if not ids:
+        return 0
+
+    placeholders = ",".join(str(i) for i in ids)
+    rows = await Lead.raw(
+        f"SELECT id, tags FROM leads WHERE id IN ({placeholders})"
+    ).run()
+
+    to_update = []
+    for row in rows:
+        existing = [t.strip() for t in (row["tags"] or "").split(",") if t.strip()]
+        if tag not in existing:
+            to_update.append(row["id"])
+
+    if to_update:
+        placeholders2 = ",".join(str(i) for i in to_update)
+        await Lead.raw(
+            f"""UPDATE leads
+                SET tags = CASE WHEN tags IS NULL OR tags = '' THEN {{}}
+                                ELSE tags || ',' || {{}} END
+                WHERE id IN ({placeholders2})""",
+            tag,
+            tag,
+        ).run()
+    return len(to_update)
 
 
 async def deactivate_mailbox(db: Any = None, mailbox_id: int = 0) -> bool:
@@ -817,23 +823,32 @@ async def enroll_leads_by_filter(
         campaign_id = db
         db = None
 
-    query = Lead.select(Lead.id)
-    if city:
-        query = query.where(Lead.city == city)
-    if state:
-        query = query.where(Lead.state == state)
-    if email_status:
-        query = query.where(Lead.email_status == email_status)
-    if tag:
-        query = query.where(Lead.tags.like(f"%{tag}%"))
+    conditions: list[str] = []
+    params: list = [campaign_id]
 
-    rows = await query.run()
-    count = 0
-    for row in rows:
-        result = await enroll_lead(campaign_id=campaign_id, lead_id=row["id"])
-        if result:
-            count += 1
-    return count
+    if city:
+        conditions.append("city = {}")
+        params.append(city)
+    if state:
+        conditions.append("state = {}")
+        params.append(state)
+    if email_status:
+        conditions.append("email_status = {}")
+        params.append(email_status)
+    if tag:
+        conditions.append("tags LIKE {}")
+        params.append(f"%{tag}%")
+
+    where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+
+    rows = await CampaignLead.raw(
+        f"""INSERT INTO campaign_leads (campaign_id, lead_id)
+            SELECT {{}}, id FROM leads {where_clause}
+            ON CONFLICT(campaign_id, lead_id) DO NOTHING
+            RETURNING id""",
+        *params,
+    ).run()
+    return len(rows)
 
 
 async def get_all_send_queues(db: Any = None, *, limit: int = 50) -> list[dict]:
@@ -1148,20 +1163,32 @@ async def update_mcp_activity(
     await McpActivity.update(updates).where(McpActivity.id == row_id).run()
 
 
-async def get_mcp_activity(limit: int = 50, offset: int = 0) -> list[McpActivity]:
+async def get_mcp_activity(
+    limit: int = 50,
+    offset: int = 0,
+    *,
+    status: str | None = None,
+    tool_name: str | None = None,
+) -> list[McpActivity]:
     """Fetch MCP activity rows ordered by most recent first."""
-    rows = (
-        await McpActivity.select()
-        .order_by(McpActivity.created_at, ascending=False)
-        .limit(limit)
-        .offset(offset)
-        .run()
-    )
+    query = McpActivity.select().order_by(McpActivity.created_at, ascending=False)
+    if status:
+        query = query.where(McpActivity.status == status)
+    if tool_name:
+        query = query.where(McpActivity.tool_name == tool_name)
+    rows = await query.limit(limit).offset(offset).run()
     return [McpActivity(**r) for r in rows]
 
 
-async def count_mcp_activity() -> int:
-    return await McpActivity.count().run()
+async def count_mcp_activity(
+    *, status: str | None = None, tool_name: str | None = None
+) -> int:
+    query = McpActivity.count()
+    if status:
+        query = query.where(McpActivity.status == status)
+    if tool_name:
+        query = query.where(McpActivity.tool_name == tool_name)
+    return await query.run()
 
 
 async def save_note(key: str, value: str) -> None:

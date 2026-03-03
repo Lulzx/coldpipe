@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import email
 import logging
@@ -264,39 +265,45 @@ async def check_bounces(db: Any, mb: object) -> int:
             elif isinstance(item, str):
                 uids.extend(item.split())
 
-        for uid in uids:
-            fetch_result, fetch_data = await client.uid("fetch", uid, "(RFC822)")
-            if fetch_result != "OK" or not fetch_data:
-                continue
+        sem = asyncio.Semaphore(5)
 
-            raw: bytes | None = None
-            for item in fetch_data:
-                if isinstance(item, tuple) and len(item) >= 2:
-                    body = item[1]
-                    if isinstance(body, bytes):
-                        raw = body
+        async def _process_uid(uid: str) -> bool:
+            async with sem:
+                fetch_result, fetch_data = await client.uid("fetch", uid, "(RFC822)")
+                if fetch_result != "OK" or not fetch_data:
+                    return False
+
+                raw: bytes | None = None
+                for item in fetch_data:
+                    if isinstance(item, tuple) and len(item) >= 2:
+                        body = item[1]
+                        if isinstance(body, bytes):
+                            raw = body
+                            break
+                        if isinstance(body, str):
+                            raw = body.encode()
+                            break
+                    elif isinstance(item, bytes):
+                        raw = item
                         break
-                    if isinstance(body, str):
-                        raw = body.encode()
-                        break
-                elif isinstance(item, bytes):
-                    raw = item
-                    break
 
-            if raw is None:
-                continue
+                if raw is None:
+                    return False
 
-            dsn = parse_dsn(raw)
-            if dsn is None:
-                continue
+                dsn = parse_dsn(raw)
+                if dsn is None:
+                    return False
 
-            await process_bounce(db, dsn)
-            processed += 1
+                await process_bounce(db, dsn)
+                # Best effort: prevent repeated processing.
+                with contextlib.suppress(Exception):
+                    await client.uid("store", uid, "+FLAGS", "(\\Seen)")
+                return True
 
-            # Best effort: prevent repeated processing.
-            with contextlib.suppress(Exception):
-                await client.uid("store", uid, "+FLAGS", "(\\Seen)")
-
+        results = await asyncio.gather(
+            *[_process_uid(uid) for uid in uids], return_exceptions=True
+        )
+        processed = sum(1 for r in results if r is True)
         return processed
     finally:
         if client is not None:

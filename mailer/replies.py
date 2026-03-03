@@ -153,13 +153,19 @@ class ReplyWatcher:
         if not uids:
             return 0
 
-        matched = 0
-        for uid in uids:
-            try:
-                if await self._process_message(uid):
-                    matched += 1
-            except Exception as exc:
+        sem = asyncio.Semaphore(5)
+
+        async def _safe_process(uid: str) -> bool:
+            async with sem:
+                return await self._process_message(uid)
+
+        results = await asyncio.gather(
+            *[_safe_process(uid) for uid in uids], return_exceptions=True
+        )
+        for uid, exc in zip(uids, results, strict=True):
+            if isinstance(exc, Exception):
                 log.error("Error processing uid %s: %s", uid, exc)
+        matched = sum(1 for r in results if r is True)
 
         log.info("Polled %d unseen, %d matched replies", len(uids), matched)
         return matched
