@@ -783,14 +783,11 @@ async def triage_reply(body: str, lead_json: str = "{}", ctx: Context = None) ->
                 pass
 
         # Keyword fallback when sampling unavailable
-        body_lower = body.lower()
-        if any(w in body_lower for w in ["unsubscribe", "remove me", "stop emailing", "opt out"]):
-            return json.dumps({"classification": "unsubscribe", "action": "mark_unsubscribed", "confidence": 0.9, "notes": "keyword match", "draft_response": None})
-        if any(w in body_lower for w in ["out of office", "ooo", "on vacation", "away until"]):
-            return json.dumps({"classification": "out_of_office", "action": "follow_up_later", "confidence": 0.9, "notes": "keyword match", "draft_response": None})
-        if any(w in body_lower for w in ["interested", "tell me more", "schedule", "call", "meeting", "yes", "love to chat"]):
-            return json.dumps({"classification": "interested", "action": "move_to_deals", "confidence": 0.75, "notes": "keyword match", "draft_response": None})
-        return json.dumps({"classification": "other", "action": "reply_needed", "confidence": 0.3, "notes": "no pattern matched", "draft_response": None})
+        from mailer.triage import triage_reply_text
+
+        result = triage_reply_text(body)
+        result["draft_response"] = None
+        return json.dumps(result)
 
     return await _logged("triage_reply", {"body_len": len(body)}, _work())
 

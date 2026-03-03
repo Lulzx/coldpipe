@@ -67,6 +67,60 @@ class ReplyWatcher:
         """Parse raw email bytes into an email.message.Message."""
         return email.message_from_bytes(raw_bytes)
 
+    def _extract_body(self, msg: Message) -> str:
+        """Extract plain-text body from an email message."""
+        if msg.is_multipart():
+            for part in msg.walk():
+                if part.get_content_type() == "text/plain":
+                    payload = part.get_payload(decode=True)
+                    if isinstance(payload, bytes):
+                        return payload.decode("utf-8", errors="replace")
+            return ""
+        payload = msg.get_payload(decode=True)
+        if isinstance(payload, bytes):
+            return payload.decode("utf-8", errors="replace")
+        return ""
+
+    async def _apply_triage(self, deal_id: int, lead_id: int, body: str) -> None:
+        """Run rule-based triage and apply the result."""
+        from db.tables import CampaignLead, Deal
+
+        from .triage import triage_reply_text
+
+        result = triage_reply_text(body)
+        classification = result["classification"]
+        action = result["action"]
+
+        try:
+            if action == "mark_unsubscribed":
+                # Update all campaign leads for this lead to unsubscribed
+                await (
+                    CampaignLead.update({CampaignLead.status: "unsubscribed"})
+                    .where(CampaignLead.lead_id == lead_id)
+                    .run()
+                )
+                log.info("Triage: lead %d marked unsubscribed", lead_id)
+            elif action == "move_to_deals":
+                # Advance deal stage to interested
+                await Deal.update({Deal.stage: "interested"}).where(Deal.id == deal_id).run()
+                log.info("Triage: deal %d advanced to interested", deal_id)
+            elif action == "follow_up_later":
+                # Pause campaign leads for this lead (out of office)
+                await (
+                    CampaignLead.update({CampaignLead.status: "paused"})
+                    .where((CampaignLead.lead_id == lead_id) & (CampaignLead.status == "active"))
+                    .run()
+                )
+                log.info("Triage: lead %d paused (out of office)", lead_id)
+
+            # Store triage result in deal notes
+            note = f"[auto-triage] {classification} (confidence={result['confidence']})"
+            await (
+                Deal.update({Deal.notes: Deal.notes + "\n" + note}).where(Deal.id == deal_id).run()
+            )
+        except Exception:
+            log.error("Triage action failed for deal %d", deal_id, exc_info=True)
+
     def _extract_reply_to(self, msg: Message) -> str | None:
         """Get the In-Reply-To or first References header value."""
         in_reply_to = msg.get("In-Reply-To", "").strip()
@@ -112,13 +166,20 @@ class ReplyWatcher:
         if sent_email is None:
             return False
 
-        # Handle the reply
-        await handle_reply(
+        # Extract reply body text for triage
+        reply_body = self._extract_body(msg)
+
+        # Handle the reply (creates deal, stops sequence)
+        deal_id = await handle_reply(
             self._db,
             email_sent_id=sent_email.id,
             campaign_id=sent_email.campaign_id,
             lead_id=sent_email.lead_id,
         )
+
+        # Run rule-based triage on the reply body
+        if reply_body and deal_id is not None:
+            await self._apply_triage(deal_id, sent_email.lead_id, reply_body)
 
         log.info(
             "Reply matched: uid=%s, message_id=%s, lead_id=%d",

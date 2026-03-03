@@ -183,6 +183,7 @@ def web_serve(
 
 
 def _register_subapps():
+    from cli.auto import auto_command
     from cli.campaign import campaign_app
     from cli.daemon import daemon_app
     from cli.deals import deals_app
@@ -192,6 +193,7 @@ def _register_subapps():
     from cli.scrape import scrape_app
     from cli.send import send_app
     from cli.setup import _setup
+    from cli.status import status_command
     from cli.track import track_app
     from cli.validate import validate_app
 
@@ -205,6 +207,9 @@ def _register_subapps():
     app.add_typer(deals_app, name="deals")
     app.add_typer(mailbox_app, name="mailbox")
     app.add_typer(daemon_app, name="daemon")
+
+    app.command("auto")(auto_command)
+    app.command("status")(status_command)
 
     @app.command()
     def setup():

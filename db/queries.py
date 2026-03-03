@@ -491,6 +491,8 @@ async def get_send_queue(
                                   AND ss.step_number = cl.current_step
            WHERE cl.campaign_id = {}
              AND cl.status = 'active'
+             AND l.email IS NOT NULL AND l.email != ''
+             AND l.email_status != 'invalid'
              AND (cl.next_send_at IS NULL OR cl.next_send_at <= strftime('%Y-%m-%dT%H:%M:%SZ','now'))
            ORDER BY cl.id
            LIMIT {}""",
@@ -770,9 +772,7 @@ async def tag_leads(db: Any = None, lead_ids: list[int] | None = None, tag: str 
         return 0
 
     placeholders = ",".join(str(i) for i in ids)
-    rows = await Lead.raw(
-        f"SELECT id, tags FROM leads WHERE id IN ({placeholders})"
-    ).run()
+    rows = await Lead.raw(f"SELECT id, tags FROM leads WHERE id IN ({placeholders})").run()
 
     to_update = []
     for row in rows:
@@ -866,7 +866,7 @@ async def get_all_send_queues(db: Any = None, *, limit: int = 50) -> list[dict]:
                                   AND ss.step_number = cl.current_step
            WHERE cl.status = 'active'
              AND c.status = 'active'
-             AND l.email IS NOT NULL
+             AND l.email IS NOT NULL AND l.email != ''
              AND l.email_status IN ('valid', 'catch_all', 'unknown')
              AND (cl.next_send_at IS NULL OR cl.next_send_at <= {})
            ORDER BY cl.id
@@ -1180,9 +1180,7 @@ async def get_mcp_activity(
     return [McpActivity(**r) for r in rows]
 
 
-async def count_mcp_activity(
-    *, status: str | None = None, tool_name: str | None = None
-) -> int:
+async def count_mcp_activity(*, status: str | None = None, tool_name: str | None = None) -> int:
     query = McpActivity.count()
     if status:
         query = query.where(McpActivity.status == status)
@@ -1217,17 +1215,13 @@ async def get_notes_by_prefix(prefix: str = "") -> list[dict]:
             f"{escaped}%",
         ).run()
     else:
-        rows = await McpNote.raw(
-            "SELECT key, value, updated_at FROM mcp_notes ORDER BY key"
-        ).run()
+        rows = await McpNote.raw("SELECT key, value, updated_at FROM mcp_notes ORDER BY key").run()
     return [dict(r) for r in rows]
 
 
 async def delete_note(key: str) -> bool:
     """Delete a note by key. Returns True if it existed."""
-    rows = await McpNote.raw(
-        "DELETE FROM mcp_notes WHERE key = {} RETURNING id", key
-    ).run()
+    rows = await McpNote.raw("DELETE FROM mcp_notes WHERE key = {} RETURNING id", key).run()
     return bool(rows)
 
 

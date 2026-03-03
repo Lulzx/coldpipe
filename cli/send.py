@@ -207,6 +207,7 @@ def run(
 @send_app.command("run-all")
 def run_all(
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview only"),
+    limit: int = typer.Option(50, help="Max emails per campaign"),
 ):
     """Send emails across all active campaigns."""
     setup_logging()
@@ -217,10 +218,100 @@ def run_all(
             if not campaigns:
                 console.print("[yellow]No active campaigns[/yellow]")
                 return
+
+            total_sent = 0
             for camp in campaigns:
                 console.print(f"\n[bold]Campaign: {camp.name} (id={camp.id})[/bold]")
-                queue = await queries.get_send_queue(db, camp.id)
+                queue = await queries.get_send_queue(db, camp.id, limit=limit)
+                if not queue:
+                    console.print("  [dim]Queue empty[/dim]")
+                    continue
+
                 console.print(f"  Queue size: {len(queue)}")
+
+                if dry_run:
+                    table = Table(title=f"Queue — {camp.name}")
+                    table.add_column("Lead")
+                    table.add_column("Email")
+                    table.add_column("Step")
+                    for item in queue:
+                        table.add_row(
+                            f"{item['first_name']} {item['last_name']}",
+                            item["email"],
+                            str(item["current_step"]),
+                        )
+                    console.print(table)
+                    continue
+
+                mailbox = await queries.get_mailbox_by_id(db, camp.mailbox_id)  # type: ignore[arg-type]
+                if not mailbox:
+                    console.print("  [red]No mailbox configured[/red]")
+                    continue
+
+                from jinja2 import Template as JinjaTemplate
+
+                from config.settings import SmtpSettings
+                from mailer.personalize import personalize_opener
+                from mailer.sender import EmailSender
+                from mailer.sequences import advance_sequence
+                from mailer.templates import render_template
+
+                smtp = SmtpSettings(
+                    host=mailbox.smtp_host,
+                    port=mailbox.smtp_port,
+                    user=mailbox.smtp_user,
+                    password=mailbox.smtp_pass,
+                )
+
+                sent_count = 0
+                async with EmailSender(
+                    smtp, from_addr=mailbox.email, display_name=mailbox.display_name
+                ) as sender:
+                    for item in queue:
+                        try:
+                            sent_today, daily_max = await queries.check_daily_limit(db, mailbox.id)
+                            warmup_limit = queries.get_warmup_limit(mailbox.warmup_day)
+                            effective_limit = min(daily_max, warmup_limit)
+                            if sent_today >= effective_limit:
+                                console.print("  [yellow]Daily limit reached[/yellow]")
+                                break
+
+                            opener = await personalize_opener(item, api_key="")
+                            context = {
+                                **item,
+                                "opener": opener,
+                                "sender_name": mailbox.display_name,
+                            }
+                            body = render_template(item["template_name"], context)
+                            subject = JinjaTemplate(item["subject"]).render(**context)
+
+                            message_id = await sender.send_with_delay(item["email"], subject, body)
+
+                            await advance_sequence(
+                                db,
+                                campaign_lead_id=item["cl_id"],
+                                campaign_id=camp.id,
+                                lead_id=item["lead_id"],
+                                mailbox_id=mailbox.id,
+                                step_number=item["current_step"],
+                                subject=subject,
+                                body=body,
+                                message_id=message_id,
+                                delay_days=item["delay_days"],
+                                to_email=item["email"],
+                                from_email=mailbox.email,
+                            )
+                            sent_count += 1
+                            console.print(
+                                f"  Sent to {item['email']} (step {item['current_step']})"
+                            )
+                        except Exception as e:
+                            console.print(f"  [red]Failed {item['email']}: {e}[/red]")
+
+                console.print(f"  [green]Sent {sent_count}/{len(queue)}[/green]")
+                total_sent += sent_count
+
+            console.print(f"\n[bold green]Total sent: {total_sent}[/bold green]")
 
     _run(_run_all())
 

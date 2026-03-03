@@ -89,9 +89,7 @@ def start():
                         ) as sender:
                             for item in items[:remaining]:
                                 try:
-                                    opener = await personalize_opener(
-                                        item, api_key=""
-                                    )
+                                    opener = await personalize_opener(item, api_key="")
                                     context = {
                                         **item,
                                         "opener": opener,
@@ -134,8 +132,9 @@ def start():
                 log.info("send_job complete: sent=%d failed=%d", sent, failed)
 
         async def reply_job():
-            """Check for new replies across all mailboxes."""
+            """Check for new replies across all mailboxes, then triage."""
             checked = 0
+            triaged = 0
             try:
                 async with get_db() as db:
                     mailboxes = await queries.get_mailboxes(db, active_only=True)
@@ -152,10 +151,111 @@ def start():
                                     mb.email,
                                     exc_info=True,
                                 )
+
+                    # Triage newly replied deals that haven't been triaged yet
+                    try:
+                        from db.tables import Deal
+                        from mailer.triage import triage_reply_text
+
+                        deals = await Deal.raw(
+                            "SELECT id, lead_id, notes FROM deals WHERE stage = 'replied' AND notes NOT LIKE '%auto-triage%'"
+                        ).run()
+                        for deal_row in deals:
+                            notes = deal_row.get("notes", "")
+                            if not notes or notes == "Auto-created from email reply":
+                                continue
+                            result = triage_reply_text(notes)
+                            if result["classification"] != "other":
+                                if result["action"] == "move_to_deals":
+                                    await (
+                                        Deal.update({Deal.stage: "interested"})
+                                        .where(Deal.id == deal_row["id"])
+                                        .run()
+                                    )
+                                note = f"\n[auto-triage] {result['classification']} (confidence={result['confidence']})"
+                                await Deal.raw(
+                                    "UPDATE deals SET notes = notes || {} WHERE id = {}",
+                                    note,
+                                    deal_row["id"],
+                                ).run()
+                                triaged += 1
+                    except Exception:
+                        log.error("reply_job: triage error", exc_info=True)
             except Exception:
                 log.error("reply_job error", exc_info=True)
             finally:
-                log.info("reply_job complete: checked=%d mailboxes", checked)
+                log.info(
+                    "reply_job complete: checked=%d mailboxes, triaged=%d deals", checked, triaged
+                )
+
+        async def enrich_job():
+            """Enrich leads that have websites but no email."""
+            enriched = 0
+            try:
+                async with get_db() as db:
+                    leads = await queries.get_leads(db, limit=50, email_status="missing")
+                    leads += await queries.get_leads(db, limit=50, email_status="unknown")
+                    to_enrich = [ld for ld in leads if ld.website and not ld.email]
+                    if to_enrich:
+                        from scrapers.website_enricher import WebsiteEnricher
+
+                        enricher = WebsiteEnricher()
+                        results = await enricher.scrape(
+                            db, limit=len(to_enrich), lead_ids=[ld.id for ld in to_enrich]
+                        )
+                        enriched = len(results)
+            except Exception:
+                log.error("enrich_job error", exc_info=True)
+            finally:
+                log.info("enrich_job complete: enriched=%d", enriched)
+
+        async def validate_job():
+            """Validate emails with unknown status."""
+            validated = 0
+            try:
+                async with get_db() as db:
+                    from db.tables import Lead
+
+                    leads = await queries.get_leads(db, limit=100, email_status="unknown")
+                    to_validate = [ld for ld in leads if ld.email]
+                    if to_validate:
+                        from tools.validate import EmailValidator
+
+                        validator = EmailValidator()
+                        status_map = {
+                            "valid": "valid",
+                            "invalid": "invalid",
+                            "error": "risky",
+                            "no-mx": "invalid",
+                            "catch-all": "catch_all",
+                        }
+                        for lead in to_validate:
+                            try:
+                                result = await validator.validate_email(lead.email)
+                                status = result.get("validation_status", "unknown")
+                                mapped = status_map.get(status, "unknown")
+                                now_iso = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+                                await (
+                                    Lead.update(
+                                        {
+                                            Lead.email_status: mapped,
+                                            Lead.validated_at: now_iso,
+                                        }
+                                    )
+                                    .where(Lead.id == lead.id)
+                                    .run()
+                                )
+                                validated += 1
+                            except Exception:
+                                log.warning(
+                                    "validate_job: error validating %s",
+                                    lead.email,
+                                    exc_info=True,
+                                )
+            except Exception:
+                log.error("validate_job error", exc_info=True)
+            finally:
+                log.info("validate_job complete: validated=%d", validated)
 
         async def bounce_job():
             """Check for bounced emails."""
@@ -252,6 +352,18 @@ def start():
             IntervalTrigger(hours=1),
             id="check_bounces",
         )
+        # Enrich leads every 2 hours
+        await scheduler.add_schedule(
+            enrich_job,
+            IntervalTrigger(hours=2),
+            id="enrich_leads",
+        )
+        # Validate emails every hour
+        await scheduler.add_schedule(
+            validate_job,
+            IntervalTrigger(hours=1),
+            id="validate_emails",
+        )
         # Advance warmup at midnight
         await scheduler.add_schedule(
             warmup_job,
@@ -267,8 +379,10 @@ def start():
 
         console.print("[green]Daemon running. Press Ctrl+C to stop.[/green]")
         console.print("  - Send emails: every 15 min")
-        console.print("  - Check replies: every 30 min")
+        console.print("  - Check replies + triage: every 30 min")
         console.print("  - Check bounces: every hour")
+        console.print("  - Enrich leads: every 2 hours")
+        console.print("  - Validate emails: every hour")
         console.print("  - Advance warmup: midnight")
         console.print("  - Database backup: 00:30")
 
